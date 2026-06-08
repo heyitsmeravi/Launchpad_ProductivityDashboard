@@ -3,7 +3,8 @@ import { useApp } from "../context/AppContext";
 import { Plus, Search, ExternalLink, Trash2, Award, Filter, Flame, Calendar, CheckSquare, Layers } from "lucide-react";
 
 export default function DSA() {
-  const { dsaProblems, setDsaProblems, roadmaps, setRoadmaps } = useApp();
+  const { dsaProblems, setDsaProblems, roadmaps, setRoadmaps, settings } = useApp();
+  const pillarName = settings?.pillar1Name || "Problem";
 
   // Form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -139,13 +140,13 @@ export default function DSA() {
     return "#f25022";
   };
 
-  const dsaRoadmapsList = roadmaps.filter(r => r.name.toLowerCase().includes("dsa") || r.name.toLowerCase().includes("blind") || r.source === "preset");
+  const dsaRoadmapsList = roadmaps.filter(r => r.name.toLowerCase().includes("roadmap") || r.name.toLowerCase().includes("blind") || r.source === "preset");
 
   return (
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h2>DSA Solver Tracker</h2>
+          <h2>{pillarName} Solver</h2>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "4px" }}>
             Log solved problems, track consecutive streaks, and execute uploaded roadmap worksheets.
           </p>
@@ -285,7 +286,7 @@ export default function DSA() {
             <div className="glass-card-header">
               <h3>
                 <Calendar size={14} style={{ color: "var(--accent)", marginRight: "4px" }} />
-                <span>DSA Solves Heatmap (Last 28 Days)</span>
+                <span>{pillarName} Solves Heatmap (Last 28 Days)</span>
               </h3>
             </div>
             <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0" }}>
@@ -441,7 +442,7 @@ export default function DSA() {
             );
           })() : (
             <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)", fontSize: "0.8rem" }}>
-              No DSA sheets synced. Go to Roadmaps tab to import an XLSX list!
+              No {pillarName} sheets synced. Go to Roadmaps tab to import an XLSX list!
             </div>
           )}
         </div>

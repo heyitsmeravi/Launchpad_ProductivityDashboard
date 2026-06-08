@@ -10,7 +10,9 @@ import {
   Play,
   Pause,
   Timer,
-  Rocket
+  Rocket,
+  Layers,
+  FolderGit2
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
@@ -32,7 +34,10 @@ export default function Sidebar() {
     { name: "Goals", path: "/goals", icon: Award },
     { name: "Analytics", path: "/analytics", icon: TrendingUp },
     { name: "Activity Log", path: "/activity-log", icon: FileText },
+    { name: "Problem Solver", path: "/solver", icon: Layers },
+    { name: "Projects", path: "/projects", icon: FolderGit2 },
     { name: "Distractions", path: "/distractions", icon: Ban },
+    { name: "Execution Center", path: "/execution", icon: Target },
     { name: "Settings", path: "/settings", icon: Settings }
   ];
 

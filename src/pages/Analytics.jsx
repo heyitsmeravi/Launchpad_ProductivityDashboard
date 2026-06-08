@@ -14,14 +14,14 @@ import {
 import { TrendingUp, Flame, Calendar, Award, CheckSquare, Target } from "lucide-react";
 
 export default function Analytics() {
-  const { activities, focusSessions, distractions, tracks, goals } = useApp();
+  const { activityLogs, dailyPlans, distractions, tracks, goals, settings } = useApp();
 
   const todayStr = new Date().toISOString().split("T")[0];
 
   // --- 1. Compute Stats ---
   
   // A. Total study hours
-  const totalStudyMinutes = activities.reduce((sum, act) => sum + act.durationMinutes, 0);
+  const totalStudyMinutes = activityLogs.reduce((sum, act) => sum + act.durationMinutes, 0);
   const totalStudyHours = (totalStudyMinutes / 60).toFixed(1);
   
   // B. Goal completion rate
@@ -34,7 +34,7 @@ export default function Analytics() {
   const totalDsaSolves = dsaTracks.reduce((sum, t) => sum + t.progress, 0);
 
   // D. Average project completion percent
-  const projectTracks = tracks.filter(t => t.category === "project");
+  const projectTracks = tracks.filter(t => t.category === "project" || t.category === "development");
   const averageProjectPct = projectTracks.length > 0 
     ? Math.round(projectTracks.reduce((sum, t) => sum + (t.progress / t.target * 100), 0) / projectTracks.length)
     : 0;
@@ -42,7 +42,7 @@ export default function Analytics() {
   // E. Streak logic
   const getOutcomeStreak = () => {
     let streak = 0;
-    const solvedDates = new Set(activities.map(a => a.date));
+    const solvedDates = new Set(activityLogs.map(a => a.date));
     let checkDate = new Date();
     
     while (true) {
@@ -67,7 +67,7 @@ export default function Analytics() {
   const getHeatmapData = () => {
     const data = [];
     const today = new Date();
-    const activityDates = activities.map(a => a.date);
+    const activityDates = activityLogs.map(a => a.date);
 
     for (let i = 27; i >= 0; i--) {
       const d = new Date();
@@ -95,19 +95,20 @@ export default function Analytics() {
       d.setDate(today.getDate() - i);
       const dateStr = d.toISOString().split("T")[0];
       
-      const dayActs = activities.filter(a => a.date === dateStr);
+      const dayActs = activityLogs.filter(a => a.date === dateStr);
       const studyMins = dayActs.reduce((sum, a) => sum + a.durationMinutes, 0);
       const studyHrs = parseFloat((studyMins / 60).toFixed(1));
 
-      const focusSecs = focusSessions.filter(s => s.date === dateStr && s.mode === "focus").reduce((sum, s) => sum + s.durationSeconds, 0);
-      const focusHrs = parseFloat((focusSecs / 3600).toFixed(1));
+      const dayPlans = dailyPlans[dateStr] || [];
+      const plannedMins = dayPlans.reduce((sum, p) => sum + (parseInt(p.estimatedMinutes, 10) || 0), 0);
+      const plannedHrs = parseFloat((plannedMins / 60).toFixed(1));
 
       const distractMins = distractions.filter(dist => dist.date === dateStr).reduce((sum, dist) => sum + dist.durationMinutes, 0);
 
       data.push({
         name: d.toLocaleDateString([], { weekday: "short" }),
         StudyHours: studyHrs,
-        FocusHours: focusHrs,
+        PlannedHours: plannedHrs,
         WastedMinutes: distractMins
       });
     }
@@ -164,7 +165,7 @@ export default function Analytics() {
             <Target size={24} />
           </div>
           <div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>Project Progress</div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>{settings?.pillar2Name || "Project"} Progress</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{averageProjectPct}% Avg</div>
           </div>
         </div>
@@ -240,7 +241,7 @@ export default function Analytics() {
         {/* Bar Chart: Focus Work vs Attention Leak (Wasted Minutes) */}
         <div className="glass-card">
           <div className="glass-card-header">
-            <h3>Deep Work vs Attention Wasted</h3>
+            <h3>Plan vs Actual (Hours)</h3>
           </div>
           <div style={{ width: "100%", height: "240px", marginTop: "1rem" }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -249,8 +250,8 @@ export default function Analytics() {
                 <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} />
                 <ChartTooltip />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="FocusHours" name="Focus Blocks (Hrs)" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="WastedMinutes" name="Distractions (Mins)" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="PlannedHours" name="Planned (Hrs)" fill="rgba(255,255,255,0.2)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="StudyHours" name="Actual Logged (Hrs)" fill="var(--accent)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

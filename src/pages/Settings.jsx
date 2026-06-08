@@ -15,6 +15,9 @@ export default function Settings() {
   const [targetSlogan, setTargetSlogan] = useState(settings.targetCompany === "Microsoft" ? "WIN A GREAT INTERNSHIP → BUILD A CAREER AT MICROSOFT" : `SOLVE PROBLEMS → SUCCEED AT ${(settings.targetCompany || "Microsoft").toUpperCase()}`);
   const [targetColor, setTargetColor] = useState(settings.themeColor || "#00a2ed");
   const [oddEvenMode, setOddEvenMode] = useState(settings.oddEvenMode !== undefined ? settings.oddEvenMode : true);
+  
+  const [pillar1Input, setPillar1Input] = useState(settings.pillar1Name || "DSA Practice");
+  const [pillar2Input, setPillar2Input] = useState(settings.pillar2Name || "Development");
 
   // Vacation Range states
   const [vacationStart, setVacationStart] = useState(settings.vacationStart || "");
@@ -57,6 +60,8 @@ export default function Settings() {
     setSettings({
       themeColor: targetColor,
       targetCompany: targetName,
+      pillar1Name: pillar1Input,
+      pillar2Name: pillar2Input,
       oddEvenMode: oddEvenMode,
       vacationStart: vacationStart,
       vacationEnd: vacationEnd,
@@ -123,10 +128,10 @@ export default function Settings() {
         {/* Main form */}
         <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           
-          {/* Target Company Presets */}
+          {/* Target Organization Presets */}
           <div className="glass-card">
             <div className="glass-card-header">
-              <h3>Target Company Presets</h3>
+              <h3>Target Organization Presets</h3>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginTop: "0.5rem" }}>
               {presets.map((p) => {
@@ -163,7 +168,7 @@ export default function Settings() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
               <div>
-                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Company Name</label>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Target Organization Name</label>
                 <input 
                   type="text" 
                   value={targetName}
@@ -199,12 +204,35 @@ export default function Settings() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1rem" }}>
               <div>
-                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Internship Slogan</label>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Career Slogan</label>
                 <input 
                   type="text" 
                   value={targetSlogan}
                   onChange={(e) => setTargetSlogan(e.target.value)}
                   placeholder="WIN A GREAT INTERNSHIP → BUILD A CAREER AT MICROSOFT"
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <div>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Primary Focus Pillar (e.g. DSA, Core Mechanics)</label>
+                <input 
+                  type="text" 
+                  value={pillar1Input}
+                  onChange={(e) => setPillar1Input(e.target.value)}
+                  placeholder="DSA Practice"
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Secondary Focus Pillar (e.g. Dev, CAD)</label>
+                <input 
+                  type="text" 
+                  value={pillar2Input}
+                  onChange={(e) => setPillar2Input(e.target.value)}
+                  placeholder="Development"
                   required
                 />
               </div>
@@ -222,7 +250,7 @@ export default function Settings() {
                 <div>
                   <span style={{ fontWeight: "bold", color: "#fff" }}>Enable Odd-Even Mode (Adaptive recommendations)</span>
                   <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "2px" }}>
-                    Odd Days recommendation: 70% DSA, 30% Dev. Even Days recommendation: 40% DSA, 60% Dev.
+                    Odd Days recommendation: 70% {pillar1Input}, 30% {pillar2Input}. Even Days recommendation: 40% {pillar1Input}, 60% {pillar2Input}.
                   </p>
                 </div>
               </label>
@@ -263,7 +291,7 @@ export default function Settings() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "1rem" }}>
               <div>
-                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>DSA (Hours)</label>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>{pillar1Input} (Hours)</label>
                 <input 
                   type="number"
                   step="0.5"
@@ -274,7 +302,7 @@ export default function Settings() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Development (Hours)</label>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>{pillar2Input} (Hours)</label>
                 <input 
                   type="number"
                   step="0.5"
@@ -374,7 +402,7 @@ export default function Settings() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.8rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
               <div>Odd-Even mode will dynamically scale daily recommended study targets on odd or even dates of the month to balance skills.</div>
-              <div>Odd calendar days shift emphasis to **DSA practice**, while even calendar days shift emphasis to **development projects**.</div>
+              <div>Odd calendar days shift emphasis to **{pillar1Input}**, while even calendar days shift emphasis to **{pillar2Input}**.</div>
             </div>
           </div>
 

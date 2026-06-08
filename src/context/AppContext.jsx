@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 
 const AppContext = createContext();
 
@@ -6,6 +6,8 @@ const AppContext = createContext();
 const DEFAULT_SETTINGS = {
   themeColor: "#00a2ed",
   targetCompany: "Microsoft",
+  pillar1Name: "DSA Practice",
+  pillar2Name: "Development",
   oddEvenMode: true,
   vacationStart: "",
   vacationEnd: "",
@@ -18,60 +20,26 @@ const DEFAULT_SETTINGS = {
   }
 };
 
-const DEFAULT_TRACKS = [
-  { id: "track-1", title: "React Mastery Course", category: "course", target: 45, progress: 15, unit: "Lessons", priority: "medium", deadline: "2026-07-01", status: "learning", tasks: [] },
-  { id: "track-2", title: "Striver's SDE Sheet", category: "dsa", target: 120, progress: 42, unit: "Problems", priority: "high", deadline: "2026-08-15", status: "learning", tasks: [] },
-  { id: "track-3", title: "Deep Work Book", category: "book", target: 300, progress: 140, unit: "Pages", priority: "medium", deadline: "2026-06-30", status: "learning", tasks: [] },
-  { id: "track-4", title: "Personal Portfolio Website", category: "project", target: 100, progress: 35, unit: "Percent", priority: "high", deadline: "2026-06-25", status: "learning", tasks: [
-    { id: "m-1", text: "Design Mockups", completed: true },
-    { id: "m-2", text: "Setup React Project", completed: true },
-    { id: "m-3", text: "Deploy to Vercel", completed: false }
-  ], description: "A sleek dev portfolio website." }
-];
+const DEFAULT_TRACKS = [];
+const DEFAULT_PLANS = {};
+const DEFAULT_GOALS = [];
+const DEFAULT_ACTIVITIES = [];
+const DEFAULT_DISTRACTIONS = [];
+const DEFAULT_FOCUS_SESSIONS = [];
 
-const DEFAULT_PLANS = {
-  [new Date().toISOString().split("T")[0]]: [
-    { id: "p-1", start: "09:00 AM", end: "11:00 AM", label: "DSA PRACTICE", desc: "Solve 3 Binary Trees questions", category: "must", completed: false },
-    { id: "p-2", start: "11:00 AM", end: "12:30 PM", label: "REACT COURSE", desc: "Watch custom hooks video", category: "must", completed: false },
-    { id: "p-3", start: "02:00 PM", end: "04:00 PM", label: "PORTFOLIO CODE", desc: "Build Navbar and animations", category: "should", completed: false },
-    { id: "p-4", start: "05:00 PM", end: "06:00 PM", label: "BOOK READING", desc: "Read 10 pages of Deep Work", category: "optional", completed: false }
-  ]
-};
-
-const DEFAULT_GOALS = [
-  { id: "g-1", title: "Secure software engineering internship at Microsoft", category: "long-term", deadline: "2026-10-31", completed: false, trackId: "track-2" },
-  { id: "g-2", title: "Complete Striver SDE sheet and review fundamentals", category: "monthly", deadline: "2026-06-30", completed: false, trackId: "track-2" },
-  { id: "g-3", title: "Solve 20 linked list and tree problems", category: "weekly", deadline: "2026-06-14", completed: false, trackId: "track-2" },
-  { id: "g-4", title: "Complete 3 React lessons & build Navbar component", category: "daily", deadline: "2026-06-08", completed: false, trackId: "track-1" }
-];
-
-const DEFAULT_ACTIVITIES = [
-  { id: "act-1", date: "2026-06-05", desc: "Solved 3 Linked List problems in LeetCode", trackId: "track-2", durationMinutes: 90, quality: 4 },
-  { id: "act-2", date: "2026-06-06", desc: "Completed 4 lessons in React Mastery course", trackId: "track-1", durationMinutes: 120, quality: 5 },
-  { id: "act-3", date: "2026-06-07", desc: "Built responsive navbar CSS layout grid", trackId: "track-4", durationMinutes: 150, quality: 4 }
-];
-
-const DEFAULT_DISTRACTIONS = [
-  { id: "dist-1", date: "2026-06-05", source: "youtube", durationMinutes: 30, trigger: "Boredom", frequency: 1 },
-  { id: "dist-2", date: "2026-06-06", source: "reels", durationMinutes: 15, trigger: "Procrastination", frequency: 2 },
-  { id: "dist-3", date: "2026-06-07", source: "gaming", durationMinutes: 45, trigger: "Stress release", frequency: 1 }
-];
-
-const DEFAULT_FOCUS_SESSIONS = [
-  { date: "2026-06-05", durationSeconds: 2 * 3600, mode: "focus" },
-  { date: "2026-06-06", durationSeconds: 4 * 3600, mode: "focus" },
-  { date: "2026-06-07", durationSeconds: 3 * 3600, mode: "focus" }
-];
+const DEFAULT_DAILY_REFLECTIONS = [];
+const DEFAULT_DAILY_SCORE_HISTORY = {};
 
 export const AppProvider = ({ children }) => {
   // --- Version Check & Automated Migration Clean Reset ---
-  const CURRENT_OS_VERSION = "v4";
+  const CURRENT_OS_VERSION = "v6";
   const savedVersion = localStorage.getItem("lp_os_version");
   if (savedVersion !== CURRENT_OS_VERSION) {
     const keysToRemove = [
-      "lp_settings", "lp_learningTracks", "lp_projects", "lp_roadmaps", 
+      "lp_learningTracks", "lp_projects", "lp_roadmaps", 
       "lp_dailyPlans", "lp_goals", "lp_activities", "lp_distractions", 
-      "lp_focusSessions", "lp_weeklyReviews", "lp_notifications"
+      "lp_focusSessions", "lp_activityLogs", "lp_weeklyReviews", "lp_notifications",
+      "lp_todayMission", "lp_currentFocusTask", "lp_dailyScoreHistory", "lp_dailyReflections"
     ];
     keysToRemove.forEach(k => localStorage.removeItem(k));
     localStorage.setItem("lp_os_version", CURRENT_OS_VERSION);
@@ -94,6 +62,8 @@ export const AppProvider = ({ children }) => {
     return {
       themeColor: loaded?.themeColor || DEFAULT_SETTINGS.themeColor,
       targetCompany: loaded?.targetCompany || DEFAULT_SETTINGS.targetCompany,
+      pillar1Name: loaded?.pillar1Name || DEFAULT_SETTINGS.pillar1Name,
+      pillar2Name: loaded?.pillar2Name || DEFAULT_SETTINGS.pillar2Name,
       oddEvenMode: loaded?.oddEvenMode !== undefined ? loaded.oddEvenMode : DEFAULT_SETTINGS.oddEvenMode,
       vacationStart: loaded?.vacationStart || "",
       vacationEnd: loaded?.vacationEnd || "",
@@ -197,21 +167,54 @@ export const AppProvider = ({ children }) => {
     const loaded = loadState("lp_goals", DEFAULT_GOALS);
     return Array.isArray(loaded) ? loaded.filter(Boolean) : DEFAULT_GOALS;
   });
-  const [activities, setActivities] = useState(() => {
-    const loaded = loadState("lp_activities", DEFAULT_ACTIVITIES);
-    return Array.isArray(loaded) ? loaded.filter(Boolean) : DEFAULT_ACTIVITIES;
+  
+  // Unified Activity Ledger (Replaces activities and focusSessions)
+  const [activityLogs, setActivityLogs] = useState(() => {
+    const loaded = loadState("lp_activityLogs", []);
+    return Array.isArray(loaded) ? loaded.filter(Boolean) : [];
   });
+
   const [distractions, setDistractions] = useState(() => {
     const loaded = loadState("lp_distractions", DEFAULT_DISTRACTIONS);
     return Array.isArray(loaded) ? loaded.filter(Boolean) : DEFAULT_DISTRACTIONS;
   });
-  const [focusSessions, setFocusSessions] = useState(() => {
-    const loaded = loadState("lp_focusSessions", DEFAULT_FOCUS_SESSIONS);
-    return Array.isArray(loaded) ? loaded.filter(Boolean) : DEFAULT_FOCUS_SESSIONS;
-  });
   const [notifications, setNotifications] = useState(() => {
     const loaded = loadState("lp_notifications", []);
     return Array.isArray(loaded) ? loaded.filter(Boolean) : [];
+  });
+
+  // --- Execution Center States ---
+  const [todayMission, setTodayMission] = useState(() => {
+    const loaded = loadState("lp_todayMission", []);
+    return Array.isArray(loaded) ? loaded : [];
+  });
+  
+  const [currentFocusTask, setCurrentFocusTask] = useState(() => {
+    return loadState("lp_currentFocusTask", null);
+  });
+  
+  const [dailyScoreHistory, setDailyScoreHistory] = useState(() => {
+    return loadState("lp_dailyScoreHistory", DEFAULT_DAILY_SCORE_HISTORY);
+  });
+  
+  const [dailyReflections, setDailyReflections] = useState(() => {
+    const loaded = loadState("lp_dailyReflections", DEFAULT_DAILY_REFLECTIONS);
+    return Array.isArray(loaded) ? loaded : DEFAULT_DAILY_REFLECTIONS;
+  });
+
+  const [dsaProblems, setDsaProblems] = useState(() => {
+    const loaded = loadState("lp_dsaProblems", []);
+    return Array.isArray(loaded) ? loaded : [];
+  });
+
+  const [roadmaps, setRoadmaps] = useState(() => {
+    const loaded = loadState("lp_roadmaps", []);
+    return Array.isArray(loaded) ? loaded : [];
+  });
+
+  const [projects, setProjects] = useState(() => {
+    const loaded = loadState("lp_projects", []);
+    return Array.isArray(loaded) ? loaded : [];
   });
 
   // Focus Timer active states
@@ -245,10 +248,16 @@ export const AppProvider = ({ children }) => {
   useEffect(() => { localStorage.setItem("lp_tracks", JSON.stringify(tracks)); }, [tracks]);
   useEffect(() => { localStorage.setItem("lp_dailyPlans", JSON.stringify(dailyPlans)); }, [dailyPlans]);
   useEffect(() => { localStorage.setItem("lp_goals", JSON.stringify(goals)); }, [goals]);
-  useEffect(() => { localStorage.setItem("lp_activities", JSON.stringify(activities)); }, [activities]);
+  useEffect(() => { localStorage.setItem("lp_activityLogs", JSON.stringify(activityLogs)); }, [activityLogs]);
   useEffect(() => { localStorage.setItem("lp_distractions", JSON.stringify(distractions)); }, [distractions]);
-  useEffect(() => { localStorage.setItem("lp_focusSessions", JSON.stringify(focusSessions)); }, [focusSessions]);
   useEffect(() => { localStorage.setItem("lp_notifications", JSON.stringify(notifications)); }, [notifications]);
+  useEffect(() => { localStorage.setItem("lp_projects", JSON.stringify(projects)); }, [projects]);
+  useEffect(() => { localStorage.setItem("lp_todayMission", JSON.stringify(todayMission)); }, [todayMission]);
+  useEffect(() => { localStorage.setItem("lp_currentFocusTask", JSON.stringify(currentFocusTask)); }, [currentFocusTask]);
+  useEffect(() => { localStorage.setItem("lp_dailyScoreHistory", JSON.stringify(dailyScoreHistory)); }, [dailyScoreHistory]);
+  useEffect(() => { localStorage.setItem("lp_dailyReflections", JSON.stringify(dailyReflections)); }, [dailyReflections]);
+  useEffect(() => { localStorage.setItem("lp_dsaProblems", JSON.stringify(dsaProblems)); }, [dsaProblems]);
+  useEffect(() => { localStorage.setItem("lp_roadmaps", JSON.stringify(roadmaps)); }, [roadmaps]);
 
   useEffect(() => {
     const todayStr = new Date().toISOString().split("T")[0];
@@ -260,64 +269,104 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem("lp_today_goals_checked_" + todayStr, JSON.stringify(todayGoalsChecked));
   }, [todayGoalsChecked]);
 
-  // --- 4. TIMER TICK EFFECT ---
+  // --- 4. TIMER TICK EFFECT (Resilient to background throttling) ---
+  const [lastTick, setLastTick] = useState(null);
+  const prevTimerSecondsRef = useRef(0);
+
+  useEffect(() => {
+    if (timerIsRunning) {
+      setLastTick(Date.now());
+      prevTimerSecondsRef.current = timerSeconds;
+    } else {
+      setLastTick(null);
+    }
+  }, [timerIsRunning]);
+
   useEffect(() => {
     let interval = null;
-    if (timerIsRunning) {
+    if (timerIsRunning && lastTick) {
       interval = setInterval(() => {
-        setTimerSeconds(prev => {
-          const limit = timerConfig[timerMode];
-          if (prev >= limit - 1) {
-            setTimerIsRunning(false);
-            // Audio alert tone
-            try {
-              const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-              const osc = audioCtx.createOscillator();
-              const gain = audioCtx.createGain();
-              osc.connect(gain);
-              gain.connect(audioCtx.destination);
-              osc.frequency.setValueAtTime(580, audioCtx.currentTime);
-              gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-              osc.start();
-              osc.stop(audioCtx.currentTime + 0.35);
-            } catch (e) {}
-
-            // Log Focus Session if focus mode completed
-            if (timerMode === "focus") {
-              const todayStr = new Date().toISOString().split("T")[0];
-              setTodayFocusSeconds(s => s + timerConfig.focus);
-              
-              const newSession = {
-                date: todayStr,
-                durationSeconds: timerConfig.focus,
-                mode: "focus"
-              };
-              setFocusSessions(prev => [...prev, newSession]);
-
-              // If associated with a planner block, mark it completed
-              if (timerActivePlanId) {
-                setDailyPlans(prev => {
-                  const todayPlans = prev[todayStr] || [];
-                  const updated = todayPlans.map(p => p.id === timerActivePlanId ? { ...p, completed: true } : p);
-                  return { ...prev, [todayStr]: updated };
-                });
-                setTimerActivePlanId(null);
-              }
-            }
-            return 0;
+        setLastTick(prevTick => {
+          const now = Date.now();
+          const deltaSecs = Math.floor((now - prevTick) / 1000);
+          
+          if (deltaSecs > 0) {
+            setTimerSeconds(prev => {
+              const limit = timerConfig[timerMode];
+              const nextSecs = prev + deltaSecs;
+              return nextSecs >= limit ? limit : nextSecs;
+            });
+            return prevTick + (deltaSecs * 1000);
           }
-
-          if (timerMode === "focus") {
-            setTodayFocusSeconds(s => s + 1);
-          }
-          return prev + 1;
+          return prevTick;
         });
       }, 1000);
-    } else {
-      clearInterval(interval);
     }
     return () => clearInterval(interval);
-  }, [timerIsRunning, timerMode, timerConfig, timerActivePlanId]);
+  }, [timerIsRunning, lastTick, timerMode, timerConfig]);
+
+  useEffect(() => {
+    if (!timerIsRunning) return;
+
+    const limit = timerConfig[timerMode];
+    const diff = timerSeconds - prevTimerSecondsRef.current;
+
+    if (diff > 0) {
+      if (timerMode === "focus") {
+        setTodayFocusSeconds(s => s + diff);
+      }
+      prevTimerSecondsRef.current = timerSeconds;
+    }
+
+    if (timerSeconds >= limit) {
+      setTimerIsRunning(false);
+      setTimerSeconds(0);
+      
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const playBeep = (time, freq, duration) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, time);
+          gain.gain.setValueAtTime(0.5, time);
+          gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+          osc.start(time);
+          osc.stop(time + duration);
+        };
+
+        const now = audioCtx.currentTime;
+        playBeep(now, 523.25, 0.4);       // C5
+        playBeep(now + 0.4, 659.25, 0.4); // E5
+        playBeep(now + 0.8, 783.99, 0.8); // G5 (longer)
+      } catch (e) {}
+
+      if (timerMode === "focus") {
+        const todayStr = new Date().toISOString().split("T")[0];
+        const newSession = {
+          id: `act-${Date.now()}`,
+          taskId: timerActivePlanId,
+          date: todayStr,
+          durationMinutes: Math.round(limit / 60),
+          desc: "Completed focus session",
+          mode: "focus"
+        };
+        setActivityLogs(prev => [...prev, newSession]);
+
+        if (timerActivePlanId) {
+          setDailyPlans(prev => {
+            const todayPlans = prev[todayStr] || [];
+            const updated = todayPlans.map(p => p.id === timerActivePlanId ? { ...p, completed: true } : p);
+            return { ...prev, [todayStr]: updated };
+          });
+          setTimerActivePlanId(null);
+        }
+      }
+    }
+  }, [timerSeconds, timerIsRunning, timerMode, timerConfig, timerActivePlanId]);
 
   // Midnight checker logic
   useEffect(() => {
@@ -358,7 +407,7 @@ export const AppProvider = ({ children }) => {
     fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
 
     activeTracks.forEach(track => {
-      const trackActivities = activities.filter(a => a.trackId === track.id);
+      const trackActivities = activityLogs.filter(a => a.trackId === track.id);
       if (trackActivities.length > 0) {
         const sortedAct = [...trackActivities].sort((a, b) => new Date(b.date) - new Date(a.date));
         const latestAct = sortedAct[0];
@@ -381,7 +430,7 @@ export const AppProvider = ({ children }) => {
       last7Days.push(d.toISOString().split("T")[0]);
     }
 
-    const last7DaysActivities = activities.filter(a => last7Days.includes(a.date));
+    const last7DaysActivities = activityLogs.filter(a => last7Days.includes(a.date));
     let dsaMins = 0;
     let projMins = 0;
     last7DaysActivities.forEach(a => {
@@ -451,16 +500,15 @@ export const AppProvider = ({ children }) => {
     }
 
     setNotifications(newNotifications);
-  }, [tracks, activities, goals, dailyPlans]);
+  }, [tracks, activityLogs, goals, dailyPlans]);
 
   const value = {
     settings, setSettings,
     tracks, setTracks,
     dailyPlans, setDailyPlans,
     goals, setGoals,
-    activities, setActivities,
+    activityLogs, setActivityLogs,
     distractions, setDistractions,
-    focusSessions, setFocusSessions,
     notifications, setNotifications,
 
     // Timer details
@@ -472,7 +520,16 @@ export const AppProvider = ({ children }) => {
     todayFocusSeconds, setTodayFocusSeconds,
 
     // Today dynamic goals checked state
-    todayGoalsChecked, setTodayGoalsChecked
+    todayGoalsChecked, setTodayGoalsChecked,
+
+    // Execution Center
+    todayMission, setTodayMission,
+    currentFocusTask, setCurrentFocusTask,
+    dailyScoreHistory, setDailyScoreHistory,
+    dailyReflections, setDailyReflections,
+    dsaProblems, setDsaProblems,
+    roadmaps, setRoadmaps,
+    projects, setProjects
   };
 
   return (

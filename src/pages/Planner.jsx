@@ -3,16 +3,16 @@ import { useApp } from "../context/AppContext";
 import { Plus, Trash2, Edit2, Check, RotateCcw, AlertTriangle, ArrowUp, ArrowDown, Save, FolderOpen, Play, ArrowLeft, ArrowRight } from "lucide-react";
 
 export default function Planner() {
-  const { dailyPlans, setDailyPlans, setTimerIsRunning, setTimerMode, setTimerSeconds, setTimerActivePlanId } = useApp();
+  const { dailyPlans, setDailyPlans, setTimerIsRunning, setTimerMode, setTimerSeconds, setTimerActivePlanId, tracks, projects, goals, dsaProblems } = useApp();
   
   // Date picker state
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   
   // Create / Edit forms
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newForm, setNewForm] = useState({ start: "09:00 AM", end: "11:00 AM", label: "", desc: "", category: "must" });
+  const [newForm, setNewForm] = useState({ start: "09:00 AM", end: "11:00 AM", estimatedMinutes: 120, label: "", desc: "", category: "must", sourceId: "" });
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ start: "", end: "", label: "", desc: "", category: "must" });
+  const [editForm, setEditForm] = useState({ start: "", end: "", estimatedMinutes: 120, label: "", desc: "", category: "must" });
 
   const activePlans = dailyPlans[selectedDate] || [];
 
@@ -34,7 +34,7 @@ export default function Planner() {
     };
 
     updatePlansForDate([...activePlans, block]);
-    setNewForm({ start: "09:00 AM", end: "11:00 AM", label: "", desc: "", category: newForm.category });
+    setNewForm({ start: "09:00 AM", end: "11:00 AM", estimatedMinutes: 120, label: "", desc: "", category: newForm.category, sourceId: "" });
     setShowAddForm(false);
   };
 
@@ -205,9 +205,36 @@ export default function Planner() {
             <div>
               <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Priority Tier</label>
               <select value={newForm.category} onChange={(e) => setNewForm({ ...newForm, category: e.target.value })}>
-                <option value="must">🔴 Must Do (DSA / Core)</option>
-                <option value="should">🟡 Should Do (Projects / Features)</option>
-                <option value="optional">🟢 Optional (Reading / Leisure)</option>
+                <option value="must">🔴 Must Do (Core)</option>
+                <option value="should">🟡 Should Do (Projects)</option>
+                <option value="optional">🟢 Optional (Leisure)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Estimated Minutes</label>
+              <input type="number" min="5" step="5" value={newForm.estimatedMinutes} onChange={(e) => setNewForm({ ...newForm, estimatedMinutes: e.target.value })} />
+            </div>
+            <div>
+              <label style={{ fontSize: "0.75rem", color: "var(--accent)", marginBottom: "4px", display: "block" }}>Pull from Backlog (Optional)</label>
+              <select value={newForm.sourceId} onChange={(e) => {
+                const val = e.target.value;
+                if (!val) {
+                  setNewForm({ ...newForm, sourceId: "" });
+                  return;
+                }
+                const opt = e.target.options[e.target.selectedIndex];
+                setNewForm({ ...newForm, sourceId: val, label: opt.text.toUpperCase() });
+              }}>
+                <option value="">-- Custom Task --</option>
+                <optgroup label="Goals">
+                  {goals.filter(g => !g.completed).map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+                </optgroup>
+                <optgroup label="Projects (Idea/Doing)">
+                  {projects.filter(p => p.status !== "done").map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                </optgroup>
+                <optgroup label="Learning Tracks">
+                  {tracks.filter(t => t.status !== "completed").map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </optgroup>
               </select>
             </div>
           </div>

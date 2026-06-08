@@ -3,7 +3,7 @@ import { useApp } from "../context/AppContext";
 import { Plus, Trash2, Calendar, Clock, Star, Zap, Award } from "lucide-react";
 
 export default function ActivityLog() {
-  const { activities, setActivities, tracks, setTracks } = useApp();
+  const { activityLogs, setActivityLogs, tracks, setTracks } = useApp();
   
   // Local Form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -36,7 +36,7 @@ export default function ActivityLog() {
     };
 
     // 1. Save activity
-    setActivities(prev => [activityEntry, ...prev]);
+    setActivityLogs(prev => [activityEntry, ...prev]);
 
     // 2. Automatically increment track progress if trackId is selected
     if (newActivity.trackId) {
@@ -69,7 +69,7 @@ export default function ActivityLog() {
   const handleDeleteActivity = (act) => {
     if (window.confirm(`Delete this log entry? Attached track progress will be adjusted by -${act.progressIncrement || 0}.`)) {
       // 1. Remove activity log
-      setActivities(prev => prev.filter(a => a.id !== act.id));
+      setActivityLogs(prev => prev.filter(a => a.id !== act.id));
 
       // 2. Adjust track progress back
       if (act.trackId && act.progressIncrement) {
@@ -88,7 +88,7 @@ export default function ActivityLog() {
     }
   };
 
-  const sortedActivities = [...activities].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const sortedActivities = [...activityLogs].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   return (
     <div className="page-container">

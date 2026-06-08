@@ -43,9 +43,9 @@ export default function Dashboard() {
     dailyPlans,
     tracks,
     goals,
-    activities,
+    activityLogs,
+    setActivityLogs,
     distractions,
-    focusSessions,
     notifications,
     timerSeconds,
     timerIsRunning,
@@ -55,7 +55,9 @@ export default function Dashboard() {
     setTimerSeconds,
     todayFocusSeconds,
     todayGoalsChecked,
-    setTodayGoalsChecked
+    setTodayGoalsChecked,
+    todayMission,
+    dailyScoreHistory
   } = useApp();
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -112,7 +114,7 @@ export default function Dashboard() {
   // 2. Streaks (Based on logged activities today/yesterday)
   const getOutcomeStreak = () => {
     let streak = 0;
-    const solvedDates = new Set((activities || []).filter(Boolean).map(a => a.date));
+    const solvedDates = new Set((activityLogs || []).filter(Boolean).map(a => a.date));
     let checkDate = new Date();
     
     while (true) {
@@ -134,10 +136,40 @@ export default function Dashboard() {
   const outcomeStreak = getOutcomeStreak();
 
   // 3. Focus and Productivity score
-  const todayActs = (activities || []).filter(a => a && a.date === todayStr);
-  const todayStudyMinutes = todayActs.reduce((sum, a) => sum + (parseInt(a.durationMinutes, 10) || 0), 0);
+  const todayActs = (activityLogs || []).filter(a => a && a.date === todayStr);
+  const studyActs = todayActs.filter(a => !a.id.includes("auto-exercise"));
+  const todayStudyMinutes = studyActs.reduce((sum, a) => sum + (parseInt(a.durationMinutes, 10) || 0), 0);
   const todayStudyHours = (todayStudyMinutes / 60).toFixed(1);
   const deepWorkHours = (todayFocusSeconds / 3600).toFixed(1);
+
+  // Execution Center Widget Data
+  const todayPlans = (dailyPlans && dailyPlans[todayStr]) || [];
+  
+  const permGoalsMap = {
+    dsa: `${settings?.pillar1Name || "DSA"} Target`,
+    development: `${settings?.pillar2Name || "Development"} Target`,
+    learning: "Learning/Course Target",
+    reading: "Reading Target",
+    exercise: "Exercise Target"
+  };
+
+  const permGoalTasks = Object.keys(permGoalsMap).map(key => ({
+    id: `perm-${key}`,
+    title: permGoalsMap[key],
+    type: "permanent",
+    completed: todayGoalsChecked[key]
+  }));
+
+  const allPossibleTasks = [
+    ...(goals || []).filter(g => g.category === "daily").map(g => ({ id: g.id, title: g.title, type: "goal", completed: g.completed })),
+    ...todayPlans.map(p => ({ id: p.id, title: `${p.label} (${p.start})`, type: "plan", completed: p.completed })),
+    ...permGoalTasks
+  ];
+  const missionTasks = allPossibleTasks.filter(t => (todayMission || []).includes(t.id));
+  const completedMissionCount = missionTasks.filter(g => g.completed).length;
+  const todayScore = dailyScoreHistory?.[todayStr] || 0;
+  const executionFocusHrs = Math.floor(todayFocusSeconds / 3600);
+  const executionFocusMins = Math.floor((todayFocusSeconds % 3600) / 60);
 
   // Focus Score: Focus blocks hours completed today vs permanent goals DSA + Dev target
   const dsaTargetHour = parseFloat(settings?.permanentGoals?.dsa) || 3;
@@ -173,15 +205,36 @@ export default function Dashboard() {
 
   // 6. Today's progress stats (DSA, Dev, Learn checkboxes)
   const isOddDay = new Date().getDate() % 2 !== 0;
+  const pillar1 = settings?.pillar1Name || "DSA Practice";
+  const pillar2 = settings?.pillar2Name || "Development";
+
   const splitRecommendation = settings?.oddEvenMode 
     ? (isOddDay 
-        ? { label: "ODD DAY (70% DSA / 30% Dev)", dsa: (dsaTargetHour * 1.2).toFixed(1), dev: (devTargetHour * 0.5).toFixed(1) }
-        : { label: "EVEN DAY (40% DSA / 60% Dev)", dsa: (dsaTargetHour * 0.6).toFixed(1), dev: (devTargetHour * 1.5).toFixed(1) }
+        ? { label: `ODD DAY (70% ${pillar1} / 30% ${pillar2})`, dsa: (dsaTargetHour * 1.2).toFixed(1), dev: (devTargetHour * 0.5).toFixed(1) }
+        : { label: `EVEN DAY (40% ${pillar1} / 60% ${pillar2})`, dsa: (dsaTargetHour * 0.6).toFixed(1), dev: (devTargetHour * 1.5).toFixed(1) }
       )
     : { label: "STANDARD DAY", dsa: dsaTargetHour, dev: devTargetHour };
 
-  const toggleGoalCheck = (key) => {
-    setTodayGoalsChecked(prev => ({ ...prev, [key]: !prev?.[key] }));
+  const toggleGoalCheck = (key, targetMins, label) => {
+    const isCurrentlyChecked = !!todayGoalsChecked?.[key];
+
+    if (!isCurrentlyChecked) {
+      // Add activity
+      const act = {
+        id: `auto-${key}-${todayStr}`,
+        date: todayStr,
+        desc: `Completed Daily Target: ${label}`,
+        trackId: "",
+        durationMinutes: targetMins,
+        quality: 4
+      };
+      setActivityLogs(prev => [act, ...prev]);
+    } else {
+      // Remove activity
+      setActivityLogs(prev => prev.filter(a => a.id !== `auto-${key}-${todayStr}`));
+    }
+
+    setTodayGoalsChecked(prev => ({ ...prev, [key]: !isCurrentlyChecked }));
   };
 
   // 7. Timer setup
@@ -203,7 +256,7 @@ export default function Dashboard() {
   const getWeeklyStatsData = () => {
     const data = [];
     const today = new Date();
-    const fSessions = focusSessions || [];
+    const fSessions = activityLogs ? activityLogs.filter(a => a.mode === "focus") : [];
     const dists = distractions || [];
     
     for (let i = 6; i >= 0; i--) {
@@ -302,25 +355,25 @@ export default function Dashboard() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
               <label className={`custom-checkbox ${todayGoalsChecked?.dsa ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.dsa} onChange={() => toggleGoalCheck("dsa")} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.dsa} onChange={() => toggleGoalCheck("dsa", Math.round(parseFloat(splitRecommendation.dsa) * 60), pillar1)} />
                 <div className="checkbox-box"></div>
                 <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                  <span>□ {splitRecommendation.dsa} Hours DSA Practice</span>
+                  <span>□ {splitRecommendation.dsa} Hours {pillar1}</span>
                   <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>Target: {splitRecommendation.dsa}h</span>
                 </div>
               </label>
 
               <label className={`custom-checkbox ${todayGoalsChecked?.development ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.development} onChange={() => toggleGoalCheck("development")} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.development} onChange={() => toggleGoalCheck("development", Math.round(parseFloat(splitRecommendation.dev) * 60), pillar2)} />
                 <div className="checkbox-box"></div>
                 <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                  <span>□ {splitRecommendation.dev} Hours Dev Coding</span>
+                  <span>□ {splitRecommendation.dev} Hours {pillar2}</span>
                   <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>Target: {splitRecommendation.dev}h</span>
                 </div>
               </label>
 
               <label className={`custom-checkbox ${todayGoalsChecked?.learning ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.learning} onChange={() => toggleGoalCheck("learning")} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.learning} onChange={() => toggleGoalCheck("learning", Math.round(learnTargetHour * 60), "Theory Lectures")} />
                 <div className="checkbox-box"></div>
                 <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
                   <span>□ {learnTargetHour} Hours Theory lectures</span>
@@ -329,7 +382,7 @@ export default function Dashboard() {
               </label>
 
               <label className={`custom-checkbox ${todayGoalsChecked?.reading ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.reading} onChange={() => toggleGoalCheck("reading")} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.reading} onChange={() => toggleGoalCheck("reading", readTargetPage * 2, "Book Reading")} />
                 <div className="checkbox-box"></div>
                 <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
                   <span>□ {readTargetPage} Pages Book reading</span>
@@ -338,7 +391,7 @@ export default function Dashboard() {
               </label>
 
               <label className={`custom-checkbox ${todayGoalsChecked?.exercise ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.exercise} onChange={() => toggleGoalCheck("exercise")} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.exercise} onChange={() => toggleGoalCheck("exercise", exerciseTargetMin, "Workout")} />
                 <div className="checkbox-box"></div>
                 <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
                   <span>□ {exerciseTargetMin} Minutes Workout</span>
@@ -347,6 +400,34 @@ export default function Dashboard() {
               </label>
             </div>
           </div>
+
+          {/* EXECUTION CENTER WIDGET */}
+          <Link to="/execution" style={{ textDecoration: "none", color: "inherit" }}>
+            <div className="glass-card" style={{ cursor: "pointer", border: "1px solid rgba(var(--accent-rgb), 0.3)", background: "linear-gradient(145deg, rgba(var(--accent-rgb), 0.05), rgba(0,0,0,0.2))" }}>
+              <div className="glass-card-header">
+                <h3>Today's Execution</h3>
+                <span style={{ fontSize: "0.7rem", color: "var(--accent)" }}>Open <ArrowRight size={10} style={{ marginLeft: "2px" }} /></span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Mission</span>
+                  <span style={{ fontSize: "1.1rem", fontWeight: "bold" }}>{completedMissionCount}/{missionTasks.length} Done</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Focus Time</span>
+                  <span style={{ fontSize: "1.1rem", fontWeight: "bold" }}>{executionFocusHrs}h {executionFocusMins}m</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Daily Score</span>
+                  <span style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#7fba00" }}>{todayScore}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Current Streak</span>
+                  <span style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#ffb900" }}>{outcomeStreak} Days</span>
+                </div>
+              </div>
+            </div>
+          </Link>
 
           {/* ACTIVE TRACK SUMMARY */}
           <div className="glass-card">
@@ -454,13 +535,13 @@ export default function Dashboard() {
               <Link to="/activity-log" style={{ color: "var(--accent)", fontSize: "0.75rem" }}>View Logs</Link>
             </div>
             
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {(activities || []).length === 0 ? (
-                <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "1rem", fontSize: "0.8rem" }}>
+            <div className="card-content">
+              {(activityLogs || []).length === 0 ? (
+                <div style={{ padding: "1.5rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem" }}>
                   No activities logged yet.
                 </div>
               ) : (
-                [...(activities || [])].filter(Boolean).sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 3).map((act) => {
+                [...(activityLogs || [])].filter(Boolean).sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 3).map((act) => {
                   const matchingTrack = (tracks || []).find(t => t && t.id === act.trackId);
                   return (
                     <div 

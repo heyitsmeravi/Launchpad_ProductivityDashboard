@@ -147,6 +147,7 @@ body {
   flex-shrink: 0;
   height: 100vh;
   justify-content: space-between;
+  overflow-y: auto;
 }
 
 .sidebar-brand {
@@ -1156,3 +1157,48 @@ button {
   color: var(--accent);
 }
 
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem;
+    border-right: none;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .sidebar-focus-widget {
+    display: none;
+  }
+  .nav-links {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+  .nav-link {
+    padding: 0.5rem;
+  }
+  .nav-link span {
+    display: none;
+  }
+  .topbar {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: auto;
+  }
+  .topbar h1 {
+    font-size: 1.25rem;
+  }
+  .page-container {
+    padding: 1rem;
+  }
+  [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+}
