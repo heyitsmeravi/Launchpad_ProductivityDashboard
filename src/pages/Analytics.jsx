@@ -11,7 +11,7 @@ import {
   Legend,
   CartesianGrid
 } from "recharts";
-import { TrendingUp, Flame, Calendar, Award, CheckSquare, Target } from "lucide-react";
+import { TrendingUp, Flame, Calendar, Award, CheckSquare, Target, Zap, Star, Activity } from "lucide-react";
 
 export default function Analytics() {
   const { activityLogs, dailyPlans, distractions, tracks, goals, settings } = useApp();
@@ -117,6 +117,34 @@ export default function Analytics() {
 
   const weeklyTrendData = getWeeklyTrendData();
 
+  // H. Track Insights
+  let totalMastered = 0;
+  let totalPlaylistWatched = 0;
+  let totalPlaylistApplied = 0;
+  let sumConfidence = 0;
+  let countConfidence = 0;
+
+  tracks.forEach(t => {
+    (t.tasks || []).forEach(task => {
+      if (task.confidence >= 5) totalMastered++;
+      if (task.confidence > 0) {
+        sumConfidence += task.confidence;
+        countConfidence++;
+      }
+      if (t.category === "playlist" || t.category === "course" || t.category === "book") {
+        if (["Completed", "Solved", "Mastered", "Applied", "Revised"].includes(task.status)) {
+          totalPlaylistWatched++;
+          if (task.status === "Applied" || task.status === "Mastered" || task.confidence >= 4) {
+            totalPlaylistApplied++;
+          }
+        }
+      }
+    });
+  });
+
+  const avgConfidence = countConfidence > 0 ? (sumConfidence / countConfidence).toFixed(1) : 0;
+  const applicationRate = totalPlaylistWatched > 0 ? Math.round((totalPlaylistApplied / totalPlaylistWatched) * 100) : 0;
+
   return (
     <div className="page-container">
       <div className="page-header">
@@ -167,6 +195,41 @@ export default function Analytics() {
           <div>
             <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>{settings?.pillar2Name || "Project"} Progress</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{averageProjectPct}% Avg</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1.25rem", marginTop: "1.25rem" }}>
+        <div className="glass-card" style={{ display: "flex", alignItems: "center", gap: "1rem", borderLeft: "3px solid #ffb900" }}>
+          <div style={{ background: "rgba(255, 185, 0, 0.1)", color: "#ffb900", padding: "0.75rem", borderRadius: "10px" }}>
+            <Zap size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>Mastered Items</div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{totalMastered}</div>
+            <div style={{ fontSize: "0.6rem", color: "var(--text-muted)" }}>5-Star Confidence Ratings</div>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ display: "flex", alignItems: "center", gap: "1rem", borderLeft: "3px solid #00a2ed" }}>
+          <div style={{ background: "rgba(0, 162, 237, 0.1)", color: "#00a2ed", padding: "0.75rem", borderRadius: "10px" }}>
+            <Activity size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>Application Rate</div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{applicationRate}%</div>
+            <div style={{ fontSize: "0.6rem", color: "var(--text-muted)" }}>Watched vs High Confidence</div>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ display: "flex", alignItems: "center", gap: "1rem", borderLeft: "3px solid var(--accent)" }}>
+          <div style={{ background: "rgba(var(--accent-rgb), 0.1)", color: "var(--accent)", padding: "0.75rem", borderRadius: "10px" }}>
+            <Star size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>Avg Confidence</div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{avgConfidence} / 5</div>
+            <div style={{ fontSize: "0.6rem", color: "var(--text-muted)" }}>Across all tracks</div>
           </div>
         </div>
       </div>

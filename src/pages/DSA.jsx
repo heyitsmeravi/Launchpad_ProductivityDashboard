@@ -3,7 +3,7 @@ import { useApp } from "../context/AppContext";
 import { Plus, Search, ExternalLink, Trash2, Award, Filter, Flame, Calendar, CheckSquare, Layers } from "lucide-react";
 
 export default function DSA() {
-  const { dsaProblems, setDsaProblems, roadmaps, setRoadmaps, settings } = useApp();
+  const { dsaProblems, setDsaProblems, tracks, setTracks, settings, timerSeconds, currentFocusTask } = useApp();
   const pillarName = settings?.pillar1Name || "Problem";
 
   // Form state
@@ -20,11 +20,58 @@ export default function DSA() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDifficulty, setFilterDifficulty] = useState("all");
   
-  // Selected DSA roadmap list
+  // Selected DSA track list
   const [selectedRoadmapIdx, setSelectedRoadmapIdx] = useState(0);
+  const [bypassModalData, setBypassModalData] = useState(null);
 
-  const activeRoadmap = roadmaps.filter(r => r.name.toLowerCase().includes("dsa") || r.name.toLowerCase().includes("blind") || r.source === "preset")[selectedRoadmapIdx] 
-    || roadmaps[0];
+  const dsaTracks = tracks.filter(t => 
+    t.category === "dsa" || 
+    t.id.startsWith("track-excel-") ||
+    t.title.toLowerCase().includes("dsa") || 
+    t.title.toLowerCase().includes("blind") || 
+    t.title.toLowerCase().includes("roadmap")
+  );
+  
+  const toggleRoadmapTask = (trackId, taskId) => {
+    const updatedTracks = tracks.map(t => {
+      if (t.id === trackId) {
+        return {
+          ...t,
+          tasks: t.tasks.map(task => {
+            if (task.id === taskId) {
+              const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(task.status);
+              return { 
+                ...task, 
+                status: isCompleted ? "Not Started" : "Completed",
+                dateCompleted: isCompleted ? null : new Date().toISOString().split("T")[0]
+              };
+            }
+            return task;
+          })
+        };
+      }
+      return t;
+    });
+    setTracks(updatedTracks);
+  };
+
+  const handleCheckboxClick = (roadmapId, task) => {
+    const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(task.status);
+    if (!isCompleted) {
+      setBypassModalData({ trackId: roadmapId, milestoneId: task.id, title: task.title });
+    } else {
+      toggleRoadmapTask(roadmapId, task.id);
+    }
+  };
+
+  const handleBypassConfirm = () => {
+    if (bypassModalData) {
+      toggleRoadmapTask(bypassModalData.trackId, bypassModalData.milestoneId);
+      setBypassModalData(null);
+    }
+  };
+
+  const activeRoadmap = dsaTracks[selectedRoadmapIdx] || dsaTracks[0];
 
   const handleAddProblem = (e) => {
     e.preventDefault();
@@ -57,26 +104,30 @@ export default function DSA() {
     }
   };
 
-  // Toggle tasks on imported roadmaps
-  const toggleRoadmapTask = (roadmapId, taskId) => {
-    setRoadmaps(prev => prev.map(r => {
-      if (r.id === roadmapId) {
-        return {
-          ...r,
-          tasks: r.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t)
-        };
-      }
-      return r;
-    }));
+  // --- Collect Completed Dates from Tracks ---
+  const getTrackCompletedDates = () => {
+    const dates = [];
+    dsaTracks.forEach(t => {
+      (t.tasks || []).forEach(task => {
+        if (["Completed", "Solved", "Mastered", "Applied"].includes(task.status) && task.dateCompleted) {
+          // ensure we only take the YYYY-MM-DD part
+          dates.push(task.dateCompleted.split("T")[0]);
+        }
+      });
+    });
+    return dates;
   };
+
+  const trackCompletedDates = getTrackCompletedDates();
 
   // --- Calculate Solve Streak ---
   const calculateStreak = () => {
     let streak = 0;
     const todayStr = new Date().toISOString().split("T")[0];
     
-    // Set of dates where at least one problem was solved
-    const solvedDates = new Set(dsaProblems.map(p => p.solvedAt));
+    // Set of dates where at least one problem was solved (combine manual and track)
+    const allDates = [...dsaProblems.map(p => p.solvedAt), ...trackCompletedDates];
+    const solvedDates = new Set(allDates);
     
     let checkDate = new Date();
     while (true) {
@@ -102,13 +153,13 @@ export default function DSA() {
   const getHeatmapData = () => {
     const data = [];
     const today = new Date();
-    const solvedDates = dsaProblems.map(p => p.solvedAt);
+    const allDates = [...dsaProblems.map(p => p.solvedAt), ...trackCompletedDates];
     
     for (let i = 27; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i);
       const dateStr = d.toISOString().split("T")[0];
-      const count = solvedDates.filter(date => date === dateStr).length;
+      const count = allDates.filter(date => date === dateStr).length;
 
       data.push({
         date: dateStr,
@@ -122,7 +173,11 @@ export default function DSA() {
   const heatmapDays = getHeatmapData();
 
   // Statistics
-  const totalSolved = dsaProblems.length;
+  const trackSolvedCount = dsaTracks.reduce((acc, t) => {
+    return acc + (t.tasks || []).filter(task => ["Completed", "Solved", "Mastered", "Applied"].includes(task.status)).length;
+  }, 0);
+  
+  const totalSolved = dsaProblems.length + trackSolvedCount;
   const easyCount = dsaProblems.filter(p => p.difficulty === "easy").length;
   const mediumCount = dsaProblems.filter(p => p.difficulty === "medium").length;
   const hardCount = dsaProblems.filter(p => p.difficulty === "hard").length;
@@ -140,7 +195,7 @@ export default function DSA() {
     return "#f25022";
   };
 
-  const dsaRoadmapsList = roadmaps.filter(r => r.name.toLowerCase().includes("roadmap") || r.name.toLowerCase().includes("blind") || r.source === "preset");
+  const dsaRoadmapsList = dsaTracks;
 
   return (
     <div className="page-container">
@@ -384,7 +439,7 @@ export default function DSA() {
         {/* Right pane: roadmap checklist synced */}
         <div className="glass-card">
           <div className="glass-card-header" style={{ marginBottom: "0.5rem" }}>
-            <h3>Synced Roadmap Syllabus</h3>
+            <h3>Synced DSA Syllabus</h3>
             {dsaRoadmapsList.length > 0 && (
               <select 
                 value={selectedRoadmapIdx}
@@ -392,7 +447,7 @@ export default function DSA() {
                 style={{ width: "auto", fontSize: "0.75rem", padding: "2px" }}
               >
                 {dsaRoadmapsList.map((rm, idx) => (
-                  <option key={rm.id} value={idx}>{rm.name}</option>
+                  <option key={rm.id} value={idx}>{rm.title}</option>
                 ))}
               </select>
             )}
@@ -400,7 +455,7 @@ export default function DSA() {
 
           {activeRoadmap ? (() => {
             const roadmapTasks = activeRoadmap.tasks || [];
-            const completedCount = roadmapTasks.filter(t => t.completed).length;
+            const completedCount = roadmapTasks.filter(t => ["Completed", "Solved", "Mastered", "Applied"].includes(t.status)).length;
             const progressPct = roadmapTasks.length > 0 ? Math.round((completedCount / roadmapTasks.length) * 100) : 0;
             return (
               <div>
@@ -419,22 +474,50 @@ export default function DSA() {
 
                 {roadmapTasks.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)", fontSize: "0.8rem" }}>
-                    This roadmap is empty. Go to Roadmaps tab to upload sheet!
+                    This track is empty. Go to Tracks tab to upload sheet!
                   </div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", maxHeight: "420px", overflowY: "auto", paddingRight: "4px" }}>
-                    {roadmapTasks.map(task => (
-                      <label key={task.id} className={`custom-checkbox ${task.completed ? "checked" : ""}`} style={{ padding: "4px 6px", alignItems: "center", background: "rgba(0,0,0,0.15)", borderRadius: "4px" }}>
-                        <input 
-                          type="checkbox"
-                          checked={task.completed}
-                          onChange={() => toggleRoadmapTask(activeRoadmap.id, task.id)}
-                        />
-                        <div className="checkbox-box" style={{ width: 12, height: 12 }}></div>
-                        <span style={{ fontSize: "0.75rem", textDecoration: task.completed ? "line-through" : "none", color: task.completed ? "var(--text-muted)" : "var(--text-primary)" }}>
-                          {task.text}
-                        </span>
-                      </label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "420px", overflowY: "auto", paddingRight: "4px" }}>
+                    {Object.entries(roadmapTasks.reduce((acc, task) => {
+                      const g = task.group || "General";
+                      if (!acc[g]) acc[g] = [];
+                      acc[g].push(task);
+                      return acc;
+                    }, {})).map(([groupName, groupTasks]) => (
+                      <div key={groupName} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        {groupName !== "General" && (
+                          <span style={{ fontSize: "0.75rem", color: "var(--accent)", fontWeight: "bold", padding: "2px 0", borderBottom: "1px solid rgba(var(--accent-rgb), 0.2)", marginBottom: "2px" }}>
+                            {groupName}
+                          </span>
+                        )}
+                        {groupTasks.map(task => {
+                          const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(task.status);
+                          return (
+                            <label key={task.id} className={`custom-checkbox ${isCompleted ? "checked" : ""}`} style={{ padding: "4px 6px", alignItems: "center", background: "rgba(0,0,0,0.15)", borderRadius: "4px" }}>
+                              <input 
+                                type="checkbox"
+                                checked={isCompleted}
+                                onChange={() => handleCheckboxClick(activeRoadmap.id, task)}
+                              />
+                              <div className="checkbox-box" style={{ width: 12, height: 12, opacity: isCompleted ? 0.5 : 1 }}></div>
+                              <span style={{ fontSize: "0.75rem", textDecoration: isCompleted ? "line-through" : "none", color: isCompleted ? "var(--text-muted)" : "var(--text-primary)", display: "flex", alignItems: "center", gap: "5px" }}>
+                                {task.title}
+                                {task.targetTimeMins && task.targetTimeMins > 0 && (
+                                  <span style={{ color: "var(--accent)", fontSize: "0.75rem", padding: "2px 6px", background: "rgba(255,255,255,0.05)", borderRadius: "4px" }}>
+                                    {(() => {
+                                      let spent = task.timeSpentMins || 0;
+                                      if (currentFocusTask === `plan-${activeRoadmap.id}::${task.id}`) {
+                                        spent += Math.floor(timerSeconds / 60);
+                                      }
+                                      return `(${spent}/${task.targetTimeMins}m)`;
+                                    })()}
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -442,12 +525,38 @@ export default function DSA() {
             );
           })() : (
             <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)", fontSize: "0.8rem" }}>
-              No {pillarName} sheets synced. Go to Roadmaps tab to import an XLSX list!
+              No {pillarName} tracks synced. Go to Tracks tab to import an XLSX list!
             </div>
           )}
         </div>
 
       </div>
+
+      {bypassModalData && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: "400px", textAlign: "center" }}>
+            <h3 style={{ color: "#ff4444", marginBottom: "1rem" }}>Manual Bypass Warning</h3>
+            <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "1.5rem", lineHeight: "1.5" }}>
+              Are you lying to yourself? Did you really put in the focused work to earn this completion, or are you just skimming the surface? True progress requires accountability.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <button 
+                onClick={handleBypassConfirm}
+                className="btn-primary"
+                style={{ background: "#ff4444", color: "#fff", borderColor: "#ff4444" }}
+              >
+                Yes, I did the hard work
+              </button>
+              <button 
+                onClick={() => setBypassModalData(null)}
+                className="btn-secondary"
+              >
+                No, I need more time
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

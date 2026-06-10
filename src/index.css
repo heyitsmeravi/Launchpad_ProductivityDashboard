@@ -148,13 +148,34 @@ body {
   height: 100vh;
   justify-content: space-between;
   overflow-y: auto;
+  z-index: 100;
+  transition: transform 0.3s ease;
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 90;
+}
+
+.mobile-close-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  margin-left: auto;
 }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
   padding-left: 0.5rem;
 }
 
@@ -184,7 +205,7 @@ body {
 .sidebar-links {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
   flex-grow: 1;
 }
 
@@ -192,11 +213,12 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 8px;
   color: var(--text-secondary);
   text-decoration: none;
   font-weight: 500;
+  font-size: 0.9rem;
   transition: all 0.25s ease;
   border: 1px solid transparent;
 }
@@ -241,21 +263,22 @@ body {
 
 /* Glass Card styling */
 .glass-card {
-  background: var(--card-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--card-border);
-  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(9, 15, 36, 0.75), rgba(5, 8, 20, 0.85));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
   padding: 1.25rem;
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
 }
 
 .glass-card:hover {
-  border-color: rgba(var(--accent-rgb), 0.25);
-  box-shadow: var(--shadow-neon), var(--shadow-card);
+  border-color: rgba(var(--accent-rgb), 0.35);
+  box-shadow: var(--shadow-neon), 0 15px 35px rgba(0, 0, 0, 0.6);
+  transform: translateY(-2px);
 }
 
 .glass-card-header {
@@ -442,6 +465,30 @@ button {
   letter-spacing: -0.5px;
 }
 
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  width: 90%;
+  max-width: 500px;
+}
+
 /* Recharts overrides to fit dark theme */
 .recharts-default-tooltip {
   background-color: var(--bg-secondary) !important;
@@ -544,6 +591,81 @@ button {
   }
 }
 
+@media (max-width: 992px) {
+  .planner-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Global Mobile Overhaul */
+@media (max-width: 768px) {
+  /* Layout Adjustments */
+  .app-layout {
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .sidebar-overlay {
+    display: block;
+  }
+  
+  .mobile-close-btn {
+    display: block;
+  }
+
+  .mobile-menu-btn {
+    display: block !important;
+  }
+
+  /* Topbar Adjustments */
+  .topbar {
+    padding: 1rem;
+    height: auto;
+  }
+  
+  .topbar h1 {
+    font-size: 1.1rem;
+  }
+
+  .topbar-date {
+    display: none;
+  }
+  
+  /* Make main content stretch nicely */
+  .main-content {
+    width: 100vw;
+  }
+
+  /* Grid Layout Fixes */
+  .page-container {
+    padding: 1rem;
+  }
+  
+  .dashboard-banner {
+    padding: 1.5rem;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Stats Cards */
+  .dashboard-container > div:nth-child(2) {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
 .quote-box {
   background: rgba(9, 15, 36, 0.45);
   border: 1px solid var(--card-border);
@@ -597,16 +719,14 @@ button {
 /* Dashboard Columns */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 300px 1fr 340px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 1.5rem;
+  align-items: stretch;
 }
 
 @media (max-width: 1400px) {
   .dashboard-grid {
-    grid-template-columns: 280px 1fr;
-  }
-  .right-column {
-    grid-column: span 2;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   }
 }
 
@@ -614,15 +734,16 @@ button {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
-  .right-column {
-    grid-column: span 1;
-  }
 }
 
 .column {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  height: 100%;
+}
+.column > .glass-card:last-child {
+  flex: 1;
 }
 
 /* Pillars list */
@@ -1165,7 +1286,9 @@ button {
   .sidebar {
     width: 100%;
     height: auto;
-    flex-direction: row;
+    flex-direction: column;
+    text-align: center;
+    /* align-items: center; */
     overflow-x: auto;
     overflow-y: hidden;
     padding: 0.5rem;
@@ -1183,9 +1306,7 @@ button {
   .nav-link {
     padding: 0.5rem;
   }
-  .nav-link span {
-    display: none;
-  }
+  
   .topbar {
     padding: 1rem;
     flex-direction: column;

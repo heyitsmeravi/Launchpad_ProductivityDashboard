@@ -32,7 +32,7 @@ const DEFAULT_DAILY_SCORE_HISTORY = {};
 
 export const AppProvider = ({ children }) => {
   // --- Version Check & Automated Migration Clean Reset ---
-  const CURRENT_OS_VERSION = "v6";
+  const CURRENT_OS_VERSION = "v7";
   const savedVersion = localStorage.getItem("lp_os_version");
   if (savedVersion !== CURRENT_OS_VERSION) {
     const keysToRemove = [
@@ -53,6 +53,15 @@ export const AppProvider = ({ children }) => {
     } catch (e) {
       console.error("Error loading localStorage key: " + key, e);
       return defaultValue;
+    }
+  };
+
+  // Helper to save localStorage safely
+  const saveState = (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.error("Error saving localStorage key: " + key, e);
     }
   };
 
@@ -81,7 +90,30 @@ export const AppProvider = ({ children }) => {
     try {
       const savedTracks = localStorage.getItem("lp_tracks");
       if (savedTracks) {
-        return JSON.parse(savedTracks);
+        const parsed = JSON.parse(savedTracks);
+        return parsed.map(track => {
+          if (!track.tasks) track.tasks = [];
+          track.tasks = track.tasks.map(task => {
+            // Check if it's already the new format
+            if (task.status !== undefined && task.confidence !== undefined) return task;
+            
+            // Migrate from old { id, text, completed } format
+            return {
+              id: task.id || "item-" + Math.random().toString(36).substr(2, 9),
+              title: task.text || "Untitled Item",
+              status: task.completed ? (track.category === "dsa" ? "Solved" : "Completed") : "Not Started",
+              confidence: task.completed ? 4 : 0,
+              timeSpentMins: 0,
+              notes: "",
+              dateCompleted: task.completed ? new Date().toISOString().split("T")[0] : null,
+              needsRevision: false,
+              keyTakeaway: "",
+              actionItem: "",
+              exercisesCompleted: false
+            };
+          });
+          return track;
+        });
       }
       // Migrate from old schemas
       const migrated = [];
@@ -218,10 +250,18 @@ export const AppProvider = ({ children }) => {
   });
 
   // Focus Timer active states
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const [timerIsRunning, setTimerIsRunning] = useState(false);
-  const [timerMode, setTimerMode] = useState("focus"); // focus, short, long
-  const [timerConfig, setTimerConfig] = useState({ focus: 25 * 60, short: 5 * 60, long: 15 * 60 });
+  const [timerSeconds, setTimerSeconds] = useState(() => loadState("lp_timerSeconds", 0));
+  const [timerIsRunning, setTimerIsRunning] = useState(() => loadState("lp_timerIsRunning", false));
+  const [timerMode, setTimerMode] = useState(() => loadState("lp_timerMode", "focus")); // focus, shortBreak, longBreak
+  const [timerConfig, setTimerConfig] = useState(() => {
+    return loadState("lp_timerConfig", {
+      focus: 25 * 60,
+      shortBreak: 5 * 60,
+      longBreak: 15 * 60
+    });
+  });
+  const [timerOverrideLimit, setTimerOverrideLimit] = useState(() => loadState("lp_timerOverrideLimit", null)); // Dynamic override in seconds
+  const [timerFinishEvent, setTimerFinishEvent] = useState(0); // Counter to trigger events across the app
   const [timerActivePlanId, setTimerActivePlanId] = useState(null);
 
   // Track today's completed focus seconds
@@ -243,6 +283,18 @@ export const AppProvider = ({ children }) => {
     });
   });
 
+  // Today's permanent goal progress in minutes
+  const [todayPermanentProgress, setTodayPermanentProgress] = useState(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    return loadState("lp_today_permanent_progress_" + todayStr, {
+      dsa: 0,
+      learning: 0,
+      development: 0,
+      reading: 0,
+      exercise: 0
+    });
+  });
+
   // --- 3. SAVE STATES TO LOCALSTORAGE ---
   useEffect(() => { localStorage.setItem("lp_settings", JSON.stringify(settings)); }, [settings]);
   useEffect(() => { localStorage.setItem("lp_tracks", JSON.stringify(tracks)); }, [tracks]);
@@ -253,11 +305,17 @@ export const AppProvider = ({ children }) => {
   useEffect(() => { localStorage.setItem("lp_notifications", JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem("lp_projects", JSON.stringify(projects)); }, [projects]);
   useEffect(() => { localStorage.setItem("lp_todayMission", JSON.stringify(todayMission)); }, [todayMission]);
-  useEffect(() => { localStorage.setItem("lp_currentFocusTask", JSON.stringify(currentFocusTask)); }, [currentFocusTask]);
-  useEffect(() => { localStorage.setItem("lp_dailyScoreHistory", JSON.stringify(dailyScoreHistory)); }, [dailyScoreHistory]);
-  useEffect(() => { localStorage.setItem("lp_dailyReflections", JSON.stringify(dailyReflections)); }, [dailyReflections]);
-  useEffect(() => { localStorage.setItem("lp_dsaProblems", JSON.stringify(dsaProblems)); }, [dsaProblems]);
-  useEffect(() => { localStorage.setItem("lp_roadmaps", JSON.stringify(roadmaps)); }, [roadmaps]);
+  useEffect(() => saveState("lp_currentFocusTask", currentFocusTask), [currentFocusTask]);
+  useEffect(() => saveState("lp_dailyScoreHistory", dailyScoreHistory), [dailyScoreHistory]);
+  useEffect(() => saveState("lp_dailyReflections", dailyReflections), [dailyReflections]);
+  useEffect(() => saveState("lp_dsaProblems", dsaProblems), [dsaProblems]);
+  useEffect(() => saveState("lp_roadmaps", roadmaps), [roadmaps]);
+  useEffect(() => saveState("lp_projects", projects), [projects]);
+  useEffect(() => saveState("lp_timerConfig", timerConfig), [timerConfig]);
+  useEffect(() => saveState("lp_timerSeconds", timerSeconds), [timerSeconds]);
+  useEffect(() => saveState("lp_timerIsRunning", timerIsRunning), [timerIsRunning]);
+  useEffect(() => saveState("lp_timerMode", timerMode), [timerMode]);
+  useEffect(() => saveState("lp_timerOverrideLimit", timerOverrideLimit), [timerOverrideLimit]);
 
   useEffect(() => {
     const todayStr = new Date().toISOString().split("T")[0];
@@ -268,6 +326,11 @@ export const AppProvider = ({ children }) => {
     const todayStr = new Date().toISOString().split("T")[0];
     localStorage.setItem("lp_today_goals_checked_" + todayStr, JSON.stringify(todayGoalsChecked));
   }, [todayGoalsChecked]);
+
+  useEffect(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    localStorage.setItem("lp_today_permanent_progress_" + todayStr, JSON.stringify(todayPermanentProgress));
+  }, [todayPermanentProgress]);
 
   // --- 4. TIMER TICK EFFECT (Resilient to background throttling) ---
   const [lastTick, setLastTick] = useState(null);
@@ -292,7 +355,7 @@ export const AppProvider = ({ children }) => {
           
           if (deltaSecs > 0) {
             setTimerSeconds(prev => {
-              const limit = timerConfig[timerMode];
+              const limit = timerOverrideLimit !== null ? timerOverrideLimit : timerConfig[timerMode];
               const nextSecs = prev + deltaSecs;
               return nextSecs >= limit ? limit : nextSecs;
             });
@@ -303,12 +366,12 @@ export const AppProvider = ({ children }) => {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [timerIsRunning, lastTick, timerMode, timerConfig]);
+  }, [timerIsRunning, lastTick, timerMode, timerConfig, timerOverrideLimit]);
 
   useEffect(() => {
     if (!timerIsRunning) return;
 
-    const limit = timerConfig[timerMode];
+    const limit = timerOverrideLimit !== null ? timerOverrideLimit : timerConfig[timerMode];
     const diff = timerSeconds - prevTimerSecondsRef.current;
 
     if (diff > 0) {
@@ -321,6 +384,8 @@ export const AppProvider = ({ children }) => {
     if (timerSeconds >= limit) {
       setTimerIsRunning(false);
       setTimerSeconds(0);
+      setTimerOverrideLimit(null);
+      setTimerFinishEvent(prev => ({ tick: (prev.tick || 0) + 1, limitSeconds: limit }));
       
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -516,6 +581,8 @@ export const AppProvider = ({ children }) => {
     timerIsRunning, setTimerIsRunning,
     timerMode, setTimerMode,
     timerConfig, setTimerConfig,
+    timerOverrideLimit, setTimerOverrideLimit,
+    timerFinishEvent, setTimerFinishEvent,
     timerActivePlanId, setTimerActivePlanId,
     todayFocusSeconds, setTodayFocusSeconds,
 
@@ -525,6 +592,7 @@ export const AppProvider = ({ children }) => {
     // Execution Center
     todayMission, setTodayMission,
     currentFocusTask, setCurrentFocusTask,
+    todayPermanentProgress, setTodayPermanentProgress,
     dailyScoreHistory, setDailyScoreHistory,
     dailyReflections, setDailyReflections,
     dsaProblems, setDsaProblems,

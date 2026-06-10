@@ -17,7 +17,7 @@ import {
 import { NavLink } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, setIsOpen }) {
   const {
     settings,
     timerSeconds,
@@ -52,7 +52,7 @@ export default function Sidebar() {
 
   // Dynamic branding logo rendering based on settings (adapted for targetCompany)
   const renderLogo = () => {
-    const logoType = (settings.targetCompany || "Microsoft").toLowerCase();
+    const logoType = ("general").toLowerCase();
     
     if (logoType.includes("microsoft")) {
       return (
@@ -86,14 +86,29 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="sidebar">
-      <div>
-        <div className="sidebar-brand">
-          {renderLogo()}
-          <span className="sidebar-title">LaunchPad</span>
-        </div>
+    <>
+      {/* Mobile overlay background */}
+      {isOpen && (
+        <div 
+          className="sidebar-overlay" 
+          onClick={() => setIsOpen(false)}
+        ></div>
+      )}
+      <aside className={`sidebar ${isOpen ? "open" : ""}`}>
+        <div>
+          <div className="sidebar-brand">
+            {renderLogo()}
+            <span className="sidebar-title">LaunchPad</span>
+            {/* Close button for mobile */}
+            <button 
+              className="mobile-close-btn"
+              onClick={() => setIsOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
 
-        <nav className="sidebar-links">
+          <nav className="sidebar-links">
           {links.map(link => {
             const Icon = link.icon;
             return (
@@ -139,5 +154,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

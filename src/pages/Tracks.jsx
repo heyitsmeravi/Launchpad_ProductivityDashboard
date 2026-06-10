@@ -21,9 +21,22 @@ import {
   Edit2,
   Code
 } from "lucide-react";
+import TrackDetail from "../components/TrackDetail";
 
 export default function Tracks() {
-  const { tracks, setTracks } = useApp();
+  const { 
+    tracks, 
+    setTracks, 
+    activityLogs,
+    setActivityLogs,
+    todayGoalsChecked,
+    setTodayGoalsChecked,
+    timerSeconds,
+    currentFocusTask
+  } = useApp();
+  
+  // Detail View State
+  const [selectedTrackId, setSelectedTrackId] = useState(null);
   
   // YouTube Playlist importer states
   const [playlistUrl, setPlaylistUrl] = useState("");
@@ -53,8 +66,8 @@ export default function Tracks() {
     description: ""
   });
 
-  // Edit track state
   const [editingId, setEditingId] = useState(null);
+  const [bypassModalData, setBypassModalData] = useState(null);
   const [editForm, setEditForm] = useState({
     title: "",
     category: "course",
@@ -212,8 +225,14 @@ export default function Tracks() {
           if (videoId && !tasks.some(t => t.videoId === videoId)) {
             tasks.push({
               id: `yt-video-${videoId}-${Date.now()}-${tasks.length}`,
-              text: `${title} (${duration})`,
-              completed: false,
+              title: `${title} (${duration})`,
+              status: "Not Started",
+              confidence: 0,
+              timeSpentMins: 0,
+              notes: "",
+              keyTakeaway: "",
+              actionItem: "",
+              dateCompleted: null,
               videoId: videoId
             });
           }
@@ -315,10 +334,16 @@ export default function Tracks() {
           
           return {
             id: `yt-video-console-${Date.now()}-${idx}-${Math.random().toString().split(".")[1]}`,
-            text: duration && duration !== "0:00" ? `${title} (${duration})` : title,
-            completed: false
+            title: `${item.title} (${item.duration || "0:00"})`,
+            status: "Not Started",
+            confidence: 0,
+            timeSpentMins: 0,
+            notes: "",
+            keyTakeaway: "",
+            actionItem: "",
+            dateCompleted: null
           };
-        }).filter(t => t.text.trim());
+        }).filter(t => t.title.trim());
 
         if (tasks.length > 0) {
           setNewTrack(prev => ({
@@ -384,8 +409,14 @@ export default function Tracks() {
           if (videoId && !tasks.some(t => t.videoId === videoId)) {
             tasks.push({
               id: `yt-video-${videoId}-${Date.now()}-${tasks.length}`,
-              text: `${title} (${duration})`,
-              completed: false,
+              title: `${title} (${duration})`,
+              status: "Not Started",
+              confidence: 0,
+              timeSpentMins: 0,
+              notes: "",
+              keyTakeaway: "",
+              actionItem: "",
+              dateCompleted: null,
               videoId: videoId
             });
           }
@@ -578,16 +609,63 @@ export default function Tracks() {
         }
       }
 
+      // Auto-detect a Day or Group column to seamlessly group the syllabus
+      let autoGroupColIndex = null;
+      const headerRow = data[0] || [];
+      const dayHeaderIdx = headerRow.findIndex(h => h && String(h).toLowerCase().trim() === "day");
+      if (dayHeaderIdx !== -1) {
+        autoGroupColIndex = dayHeaderIdx;
+      }
+
+      let lastGroupName = "General";
+
       const tasks = data.map((row, idx) => {
+        if (!row) return null;
         if (idx === 0) return null; // Skip header
         const cell = row[colIndex];
         if (cell === undefined || cell === null) return null;
         const text = String(cell).trim();
         if (!text) return null;
+
+        let url = null;
+        try {
+          const cellAddress = XLSX.utils.encode_cell({ r: idx, c: colIndex });
+          const cellObj = ws[cellAddress];
+          if (cellObj && cellObj.l && cellObj.l.Target) url = cellObj.l.Target;
+        } catch (e) {}
+
+        if (autoGroupColIndex !== null) {
+          const groupCell = row[autoGroupColIndex];
+          if (groupCell !== undefined && groupCell !== null && String(groupCell).trim() !== "") {
+            lastGroupName = `Day ${String(groupCell).trim()}`;
+          }
+        }
+
+        const extractTimeMins = (str) => {
+          const regex = /(\d+(?:\.\d+)?)\s*(hr|h|min|m|mins|hours|hour)\b/gi;
+          let totalMins = 0;
+          let match;
+          while ((match = regex.exec(str)) !== null) {
+            const val = parseFloat(match[1]);
+            const unit = match[2].toLowerCase();
+            if (unit.startsWith('h')) totalMins += val * 60;
+            else if (unit.startsWith('m')) totalMins += val;
+          }
+          return totalMins > 0 ? Math.round(totalMins) : 0;
+        };
+
         return {
           id: `task-imported-${Date.now()}-${idx}-${Math.random().toString().split(".")[1]}`,
-          text: text,
-          completed: false
+          title: text,
+          group: lastGroupName,
+          link: url,
+          status: "Not Started",
+          confidence: 0,
+          timeSpentMins: 0,
+          targetTimeMins: extractTimeMins(text),
+          notes: "",
+          dateCompleted: null,
+          needsRevision: false
         };
       }).filter(Boolean);
 
@@ -616,7 +694,7 @@ export default function Tracks() {
       setPendingExcelData(null);
     } catch (err) {
       console.error("Excel import failed: ", err);
-      alert("Failed to parse sheet. Ensure the sheet has proper data formatting.");
+      alert("Failed to parse sheet. Error: " + err.message);
     }
   };
 
@@ -624,8 +702,23 @@ export default function Tracks() {
   const toggleMilestone = (trackId, milestoneId) => {
     setTracks(prev => prev.map(t => {
       if (t.id === trackId) {
-        const updatedTasks = (t.tasks || []).map(m => m.id === milestoneId ? { ...m, completed: !m.completed } : m);
-        const progress = updatedTasks.filter(m => m.completed).length;
+        const updatedTasks = (t.tasks || []).map(m => {
+          if (m.id === milestoneId) {
+            const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(m.status);
+            return { 
+              ...m, 
+              status: isCompleted ? "Not Started" : "Completed",
+              dateCompleted: isCompleted ? null : new Date().toISOString().split("T")[0]
+            };
+          }
+          return m;
+        });
+        
+        const completedCount = updatedTasks.filter(item => 
+          ["Completed", "Solved", "Mastered", "Applied"].includes(item.status)
+        ).length;
+
+        const progress = completedCount;
         const target = t.category === "project" || t.category === "skill" || t.tasks.length > 0 ? updatedTasks.length : t.target;
         return {
           ...t,
@@ -637,6 +730,22 @@ export default function Tracks() {
       }
       return t;
     }));
+  };
+
+  const handleCheckboxClick = (t, task) => {
+    const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(task.status);
+    if (!isCompleted) {
+      setBypassModalData({ trackId: t.id, milestoneId: task.id, title: task.title });
+    } else {
+      toggleMilestone(t.id, task.id);
+    }
+  };
+
+  const handleBypassConfirm = () => {
+    if (bypassModalData) {
+      toggleMilestone(bypassModalData.trackId, bypassModalData.milestoneId);
+      setBypassModalData(null);
+    }
   };
 
   const getCategoryIcon = (category) => {
@@ -658,6 +767,14 @@ export default function Tracks() {
     const matchesCat = categoryFilter === "all" || t.category === categoryFilter;
     return matchesTab && matchesCat;
   });
+
+  if (selectedTrackId) {
+    return (
+      <div className="page-container">
+        <TrackDetail trackId={selectedTrackId} onBack={() => setSelectedTrackId(null)} />
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">
@@ -685,11 +802,11 @@ export default function Tracks() {
                   ))}
                 </div>
               </>
-            ) : (
-              <>
-                <h3 style={{ marginBottom: "1rem" }}>Select Target Column</h3>
+            ) : pendingExcelData.step === "column" && (
+                <>
+                <h3 style={{ marginBottom: "1rem" }}>Select Task Column</h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
-                  Which column contains the tasks you want to track from "{pendingExcelData.selectedSheet}"?
+                  Which column contains the tasks or problem names you want to track from "{pendingExcelData.selectedSheet}"?
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.5rem", maxHeight: "300px", overflowY: "auto" }}>
                   {pendingExcelData.headers.map(header => (
@@ -704,8 +821,8 @@ export default function Tracks() {
                     </button>
                   ))}
                 </div>
-              </>
-            )}
+                </>
+              )}
             <button 
               onClick={() => setPendingExcelData(null)}
               className="btn-secondary"
@@ -932,7 +1049,7 @@ export default function Tracks() {
                       border: "1px solid rgba(255,255,255,0.05)",
                       userSelect: "all"
                     }}>
-                      {`copy(Array.from(document.querySelectorAll('ytd-playlist-video-renderer')).map(v=>({title:v.querySelector('#video-title')?.title||v.querySelector('#video-title')?.innerText,duration:v.querySelector('ytd-thumbnail-overlay-time-status-renderer')?.innerText})))`}
+                      {`copy((()=>{const p=document.querySelector('ytd-playlist-video-list-renderer, ytd-playlist-panel-renderer, yt-item-section-renderer[data-target-id^="PL"]');return Array.from((p||document).querySelectorAll('ytd-playlist-video-renderer, ytd-playlist-panel-video-renderer, yt-lockup-view-model')).map(c=>{const t=c.querySelector('#video-title, .ytLockupMetadataViewModelHeadingReset');const d=c.querySelector('ytd-thumbnail-overlay-time-status-renderer, badge-shape, .badge-shape-wiz__text');return t?{title:t.innerText.trim()||t.title,duration:d?d.innerText.trim():"0:00"}:null}).filter(x=>x&&x.title)})())`}
                     </pre>
                     <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginBottom: "4px" }}>
                       3. Paste the copied list (automatically copied to your clipboard) below:
@@ -1117,30 +1234,29 @@ export default function Tracks() {
                 }}
               >
                 {/* Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                    <div style={{ background: "rgba(255,255,255,0.03)", padding: "4px", borderRadius: "4px" }}>
-                      {getCategoryIcon(t.category)}
-                    </div>
-                    <div>
-                      <h4 style={{ color: "#fff", fontWeight: 700, fontSize: "0.9rem", lineHeight: 1.2 }}>{t.title}</h4>
-                      <span style={{ fontSize: "0.65rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>
-                        {t.category} &bull; <strong style={{ color: t.priority === "high" ? "#f25022" : "var(--accent)" }}>{t.priority.toUpperCase()}</strong>
-                      </span>
-                    </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    {t.category === "dsa" ? <Code size={20} color="var(--ms-green)" /> :
+                     t.category === "course" ? <GraduationCap size={20} color="var(--ms-blue)" /> :
+                     t.category === "book" ? <Book size={20} color="var(--ms-yellow)" /> :
+                     t.category === "project" ? <Briefcase size={20} color="var(--meta-blue)" /> :
+                     t.category === "playlist" ? <PlayCircle size={20} color="var(--netflix-red)" /> :
+                     <Layers size={20} color="var(--accent)" />}
+                    <h3 style={{ margin: 0, fontSize: "1.2rem" }}>{t.title}</h3>
                   </div>
-                  
-                  <div style={{ display: "flex", gap: "0.25rem" }}>
-                    <button onClick={() => startEditing(t)} style={{ background: "transparent", color: "rgba(255,255,255,0.4)" }} title="Edit Track">
-                      <Edit2 size={12} />
-                    </button>
-                    <button onClick={() => toggleArchiveTrack(t.id)} style={{ background: "transparent", color: "rgba(255,255,255,0.4)" }} title={t.status === "archived" ? "Unarchive" : "Archive"}>
-                      <Archive size={12} />
-                    </button>
-                    <button onClick={() => deleteTrack(t.id)} style={{ background: "transparent", color: "rgba(239, 68, 68, 0.4)" }} title="Delete Track">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+                </div>
+                
+                {/* Action Buttons Overlay */}
+                <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+                  <button onClick={() => setSelectedTrackId(t.id)} className="btn-primary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <Layers size={14} /> Open
+                  </button>
+                  <button onClick={() => startEditing(t)} className="btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <Edit2 size={14} /> Edit
+                  </button>
+                  <button onClick={() => deleteTrack(t.id)} className="btn-danger" style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <Trash2 size={14} />
+                  </button>
                 </div>
 
                 {t.description && (
@@ -1168,8 +1284,26 @@ export default function Tracks() {
 
                 {/* Progress bar */}
                 <div style={{ marginTop: "auto" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-secondary)", marginBottom: "3px" }}>
-                    <span>Deadline: <strong>{t.deadline || "No deadline"}</strong></span>
+                  <div style={{ fontSize: "0.65rem", color: "var(--text-secondary)", marginBottom: "4px" }}>
+                    Deadline: <strong>{t.deadline || "No deadline"}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "6px", alignItems: "center" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      {t.progress} / {t.target} {t.unit}
+                      {(!t.tasks || t.tasks.length === 0) && (
+                        <button 
+                          onClick={() => {
+                            const val = window.prompt(`Enter new progress (out of ${t.target} ${t.unit}):`, t.progress);
+                            if (val !== null && !isNaN(parseInt(val, 10))) {
+                              setTracks(prev => prev.map(trk => trk.id === t.id ? { ...trk, progress: parseInt(val, 10) } : trk));
+                            }
+                          }}
+                          style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", borderRadius: "4px", padding: "2px 6px", cursor: "pointer", fontSize: "0.65rem" }}
+                        >
+                          Update
+                        </button>
+                      )}
+                    </span>
                     <span style={{ fontWeight: "bold", color: pct >= 100 ? "#7fba00" : "var(--accent)" }}>{pct}%</span>
                   </div>
                   <div className="milestone-bar-bg" style={{ height: "4px" }}>
@@ -1185,21 +1319,54 @@ export default function Tracks() {
                     marginTop: "0.4rem" 
                   }}>
                     <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: "bold", display: "block", marginBottom: "4px" }}>
-                      Syllabus Checklist ({t.tasks.filter(tk => tk.completed).length}/{t.tasks.length})
+                      Syllabus Checklist ({t.tasks.filter(tk => ["Completed", "Solved", "Mastered", "Applied"].includes(tk.status)).length}/{t.tasks.length})
                     </span>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "3px", maxHeight: "120px", overflowY: "auto", paddingRight: "4px" }}>
-                      {t.tasks.map(task => (
-                        <label key={task.id} className={`custom-checkbox ${task.completed ? "checked" : ""}`} style={{ padding: "3px 4px", fontSize: "0.7rem", background: "rgba(0,0,0,0.1)", borderRadius: "3px" }}>
-                          <input 
-                            type="checkbox"
-                            checked={task.completed}
-                            onChange={() => toggleMilestone(t.id, task.id)}
-                          />
-                          <div className="checkbox-box" style={{ width: 10, height: 10 }}></div>
-                          <span style={{ textDecoration: task.completed ? "line-through" : "none", color: task.completed ? "var(--text-muted)" : "var(--text-primary)" }}>
-                            {task.text}
-                          </span>
-                        </label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "150px", overflowY: "auto", paddingRight: "4px" }}>
+                      {Object.entries(t.tasks.reduce((acc, task) => {
+                        const g = task.group || "General";
+                        if (!acc[g]) acc[g] = [];
+                        acc[g].push(task);
+                        return acc;
+                      }, {})).map(([groupName, groupTasks]) => (
+                        <div key={groupName} style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                          {groupName !== "General" && (
+                            <span style={{ fontSize: "0.65rem", color: "var(--accent)", fontWeight: "bold", padding: "2px 0", borderBottom: "1px solid rgba(var(--accent-rgb), 0.2)", marginBottom: "2px" }}>
+                              {groupName}
+                            </span>
+                          )}
+                          {groupTasks.map(task => {
+                            const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(task.status);
+                            return (
+                              <label key={task.id} className={`custom-checkbox ${isCompleted ? "checked" : ""}`} style={{ padding: "3px 4px", fontSize: "0.7rem", background: "rgba(0,0,0,0.1)", borderRadius: "3px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                <input 
+                                  type="checkbox"
+                                  checked={isCompleted}
+                                  onChange={() => handleCheckboxClick(t, task)}
+                                />
+                                <div className="checkbox-box" style={{ width: 10, height: 10, opacity: isCompleted ? 0.5 : 1 }}></div>
+                                <span style={{ textDecoration: isCompleted ? "line-through" : "none", color: isCompleted ? "var(--text-muted)" : "var(--text-primary)", flex: 1, display: "flex", alignItems: "center", gap: "5px" }}>
+                                  {task.title}
+                                  {task.targetTimeMins && task.targetTimeMins > 0 && (
+                                    <span style={{ color: "var(--accent)", fontSize: "0.75rem", padding: "2px 6px", background: "rgba(255,255,255,0.05)", borderRadius: "4px" }}>
+                                      {(() => {
+                                        let spent = task.timeSpentMins || 0;
+                                        if (currentFocusTask === `plan-${t.id}::${task.id}`) {
+                                          spent += Math.floor(timerSeconds / 60);
+                                        }
+                                        return `(${spent}/${task.targetTimeMins}m)`;
+                                      })()}
+                                    </span>
+                                  )}
+                                </span>
+                                {task.link && (
+                                  <a href={task.link} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", display: "flex", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                  </a>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -1209,6 +1376,32 @@ export default function Tracks() {
           })
         )}
       </div>
+
+      {bypassModalData && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: "400px", textAlign: "center" }}>
+            <h3 style={{ color: "#ff4444", marginBottom: "1rem" }}>Manual Bypass Warning</h3>
+            <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "1.5rem", lineHeight: "1.5" }}>
+              Are you lying to yourself? Did you really put in the focused work to earn this completion, or are you just skimming the surface? True progress requires accountability.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <button 
+                onClick={handleBypassConfirm}
+                className="btn-primary"
+                style={{ background: "#ff4444", color: "#fff", borderColor: "#ff4444" }}
+              >
+                Yes, I did the hard work
+              </button>
+              <button 
+                onClick={() => setBypassModalData(null)}
+                className="btn-secondary"
+              >
+                No, I need more time
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useApp } from "../../context/AppContext";
-import { Timer, Award } from "lucide-react";
+import { Timer, Award, Menu } from "lucide-react";
 
-export default function Topbar() {
+export default function Topbar({ toggleMenu }) {
   const { settings, todayFocusSeconds } = useApp();
   const [time, setTime] = useState(new Date());
 
@@ -24,9 +24,18 @@ export default function Topbar() {
 
   return (
     <header className="topbar">
-      <h1>
-        <span style={{ color: "var(--accent)" }}>MISSION: {settings?.targetCompany || "Microsoft"}</span> 
-      </h1>
+      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+        <button 
+          className="mobile-menu-btn" 
+          onClick={toggleMenu}
+          style={{ background: "transparent", border: "none", color: "var(--text-primary)", cursor: "pointer", display: "none" }}
+        >
+          <Menu size={24} />
+        </button>
+        <h1>
+          <span style={{ color: "var(--accent)" }}>MISSION: {settings?.targetCompany || "Microsoft"}</span> 
+        </h1>
+      </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
         {/* Today's Focus Hours tracker quick widget */}

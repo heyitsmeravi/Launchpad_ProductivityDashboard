@@ -55,9 +55,14 @@ export default function Dashboard() {
     setTimerSeconds,
     todayFocusSeconds,
     todayGoalsChecked,
+    todayPermanentProgress,
     setTodayGoalsChecked,
     todayMission,
-    dailyScoreHistory
+    dailyScoreHistory,
+    currentFocusTask,
+    timerOverrideLimit,
+    setTimerOverrideLimit,
+    setTimerMode
   } = useApp();
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -81,6 +86,8 @@ export default function Dashboard() {
 
   const todayStr = new Date().toISOString().split("T")[0];
   const todayPlansList = dailyPlans?.[todayStr] || [];
+
+  const [bypassModalData, setBypassModalData] = useState(null);
 
   // --- Calculations ---
 
@@ -237,8 +244,53 @@ export default function Dashboard() {
     setTodayGoalsChecked(prev => ({ ...prev, [key]: !isCurrentlyChecked }));
   };
 
+  const handleCheckboxClick = (key, targetMins, label) => {
+    const isCompleted = !!todayGoalsChecked?.[key];
+    if (!isCompleted) {
+      setBypassModalData({ key, targetMins, label });
+    } else {
+      toggleGoalCheck(key, targetMins, label);
+    }
+  };
+
+  const handleBypassConfirm = () => {
+    if (bypassModalData) {
+      toggleGoalCheck(bypassModalData.key, bypassModalData.targetMins, bypassModalData.label);
+      setBypassModalData(null);
+    }
+  };
+
+  const getLiveProgress = (key) => {
+    let base = todayPermanentProgress?.[key] || 0;
+    if (currentFocusTask === `perm-${key}`) {
+      base += Math.floor(timerSeconds / 60);
+    }
+    return base;
+  };
+
+  useEffect(() => {
+    const dsaTarget = Math.round(parseFloat(splitRecommendation.dsa) * 60);
+    const devTarget = Math.round(parseFloat(splitRecommendation.dev) * 60);
+    const learnTarget = Math.round(learnTargetHour * 60);
+    const readTarget = readTargetPage * 2;
+    const exTarget = exerciseTargetMin;
+
+    setTodayGoalsChecked(prev => {
+      let changed = false;
+      const next = { ...prev };
+      
+      if (!prev.dsa && getLiveProgress("dsa") >= dsaTarget && dsaTarget > 0) { next.dsa = true; changed = true; }
+      if (!prev.development && getLiveProgress("development") >= devTarget && devTarget > 0) { next.development = true; changed = true; }
+      if (!prev.learning && getLiveProgress("learning") >= learnTarget && learnTarget > 0) { next.learning = true; changed = true; }
+      if (!prev.reading && getLiveProgress("reading") >= readTarget && readTarget > 0) { next.reading = true; changed = true; }
+      if (!prev.exercise && getLiveProgress("exercise") >= exTarget && exTarget > 0) { next.exercise = true; changed = true; }
+      
+      return changed ? next : prev;
+    });
+  }, [todayPermanentProgress, timerSeconds, splitRecommendation, setTodayGoalsChecked, currentFocusTask]);
+
   // 7. Timer setup
-  const activeLimit = timerConfig?.[timerMode] || 25 * 60;
+  const activeLimit = timerOverrideLimit !== null ? timerOverrideLimit : (timerConfig?.[timerMode] || 25 * 60);
   const timeRemaining = Math.max(0, activeLimit - timerSeconds);
   const remainingMins = Math.floor(timeRemaining / 60);
   const remainingSecs = timeRemaining % 60;
@@ -355,47 +407,67 @@ export default function Dashboard() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
               <label className={`custom-checkbox ${todayGoalsChecked?.dsa ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.dsa} onChange={() => toggleGoalCheck("dsa", Math.round(parseFloat(splitRecommendation.dsa) * 60), pillar1)} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.dsa} onChange={() => handleCheckboxClick("dsa", Math.round(parseFloat(splitRecommendation.dsa) * 60), pillar1)} />
                 <div className="checkbox-box"></div>
-                <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                  <span>□ {splitRecommendation.dsa} Hours {pillar1}</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>Target: {splitRecommendation.dsa}h</span>
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px", textDecoration: todayGoalsChecked?.dsa ? "line-through" : "none", color: todayGoalsChecked?.dsa ? "var(--text-muted)" : "inherit" }}>
+                    □ {splitRecommendation.dsa} Hours {pillar1}
+                    <span style={{ color: "var(--accent)", fontSize: "0.6rem", padding: "1px 4px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", textDecoration: "none" }}>
+                      ({getLiveProgress("dsa")}/{Math.round(parseFloat(splitRecommendation.dsa) * 60)}m)
+                    </span>
+                  </span>
                 </div>
               </label>
 
               <label className={`custom-checkbox ${todayGoalsChecked?.development ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.development} onChange={() => toggleGoalCheck("development", Math.round(parseFloat(splitRecommendation.dev) * 60), pillar2)} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.development} onChange={() => handleCheckboxClick("development", Math.round(parseFloat(splitRecommendation.dev) * 60), pillar2)} />
                 <div className="checkbox-box"></div>
-                <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                  <span>□ {splitRecommendation.dev} Hours {pillar2}</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>Target: {splitRecommendation.dev}h</span>
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px", textDecoration: todayGoalsChecked?.development ? "line-through" : "none", color: todayGoalsChecked?.development ? "var(--text-muted)" : "inherit" }}>
+                    □ {splitRecommendation.dev} Hours {pillar2}
+                    <span style={{ color: "var(--accent)", fontSize: "0.6rem", padding: "1px 4px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", textDecoration: "none" }}>
+                      ({getLiveProgress("development")}/{Math.round(parseFloat(splitRecommendation.dev) * 60)}m)
+                    </span>
+                  </span>
                 </div>
               </label>
 
               <label className={`custom-checkbox ${todayGoalsChecked?.learning ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.learning} onChange={() => toggleGoalCheck("learning", Math.round(learnTargetHour * 60), "Theory Lectures")} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.learning} onChange={() => handleCheckboxClick("learning", Math.round(learnTargetHour * 60), "Theory Lectures")} />
                 <div className="checkbox-box"></div>
-                <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                  <span>□ {learnTargetHour} Hours Theory lectures</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>Target: {learnTargetHour}h</span>
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px", textDecoration: todayGoalsChecked?.learning ? "line-through" : "none", color: todayGoalsChecked?.learning ? "var(--text-muted)" : "inherit" }}>
+                    □ {learnTargetHour} Hours Theory lectures
+                    <span style={{ color: "var(--accent)", fontSize: "0.6rem", padding: "1px 4px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", textDecoration: "none" }}>
+                      ({getLiveProgress("learning")}/{Math.round(learnTargetHour * 60)}m)
+                    </span>
+                  </span>
                 </div>
               </label>
 
               <label className={`custom-checkbox ${todayGoalsChecked?.reading ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.reading} onChange={() => toggleGoalCheck("reading", readTargetPage * 2, "Book Reading")} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.reading} onChange={() => handleCheckboxClick("reading", readTargetPage * 2, "Book Reading")} />
                 <div className="checkbox-box"></div>
-                <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                  <span>□ {readTargetPage} Pages Book reading</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>Target: {readTargetPage} pgs</span>
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px", textDecoration: todayGoalsChecked?.reading ? "line-through" : "none", color: todayGoalsChecked?.reading ? "var(--text-muted)" : "inherit" }}>
+                    □ {readTargetPage} Pages Book reading
+                    <span style={{ color: "var(--accent)", fontSize: "0.6rem", padding: "1px 4px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", textDecoration: "none" }}>
+                      ({getLiveProgress("reading")}/{readTargetPage * 2}m)
+                    </span>
+                  </span>
                 </div>
               </label>
 
               <label className={`custom-checkbox ${todayGoalsChecked?.exercise ? "checked" : ""}`}>
-                <input type="checkbox" checked={!!todayGoalsChecked?.exercise} onChange={() => toggleGoalCheck("exercise", exerciseTargetMin, "Workout")} />
+                <input type="checkbox" checked={!!todayGoalsChecked?.exercise} onChange={() => handleCheckboxClick("exercise", exerciseTargetMin, "Workout")} />
                 <div className="checkbox-box"></div>
-                <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                  <span>□ {exerciseTargetMin} Minutes Workout</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>Target: {exerciseTargetMin}m</span>
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px", textDecoration: todayGoalsChecked?.exercise ? "line-through" : "none", color: todayGoalsChecked?.exercise ? "var(--text-muted)" : "inherit" }}>
+                    □ {exerciseTargetMin} Minutes Workout
+                    <span style={{ color: "var(--accent)", fontSize: "0.6rem", padding: "1px 4px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", textDecoration: "none" }}>
+                      ({getLiveProgress("exercise")}/{exerciseTargetMin}m)
+                    </span>
+                  </span>
                 </div>
               </label>
             </div>
@@ -515,14 +587,14 @@ export default function Dashboard() {
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                <button onClick={() => { setTimerIsRunning(false); setTimerMode("focus"); setTimerSeconds(0); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
-                  Focus Timer (25 min)
+                <button onClick={() => { setTimerIsRunning(false); setTimerMode("focus"); setTimerSeconds(0); setTimerOverrideLimit(null); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
+                  Focus Timer ({Math.floor((timerConfig?.focus || 1500) / 60)} min)
                 </button>
-                <button onClick={() => { setTimerIsRunning(false); setTimerMode("short"); setTimerSeconds(0); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
-                  Short Break (5 min)
+                <button onClick={() => { setTimerIsRunning(false); setTimerMode("shortBreak"); setTimerSeconds(0); setTimerOverrideLimit(null); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
+                  Short Break ({Math.floor((timerConfig?.shortBreak || 300) / 60)} min)
                 </button>
-                <button onClick={() => { setTimerIsRunning(false); setTimerMode("long"); setTimerSeconds(0); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
-                  Long Break (15 min)
+                <button onClick={() => { setTimerIsRunning(false); setTimerMode("longBreak"); setTimerSeconds(0); setTimerOverrideLimit(null); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
+                  Long Break ({Math.floor((timerConfig?.longBreak || 900) / 60)} min)
                 </button>
               </div>
             </div>
@@ -665,6 +737,32 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {bypassModalData && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: "400px", textAlign: "center" }}>
+            <h3 style={{ color: "#ff4444", marginBottom: "1rem" }}>Manual Bypass Warning</h3>
+            <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "1.5rem", lineHeight: "1.5" }}>
+              Are you lying to yourself? Did you really put in the focused work to earn this completion, or are you just skimming the surface? True progress requires accountability.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <button 
+                onClick={handleBypassConfirm}
+                className="btn-primary"
+                style={{ background: "#ff4444", color: "#fff", borderColor: "#ff4444" }}
+              >
+                Yes, I did the hard work
+              </button>
+              <button 
+                onClick={() => setBypassModalData(null)}
+                className="btn-secondary"
+              >
+                No, I need more time
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

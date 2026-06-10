@@ -13,14 +13,19 @@ import DSA from "./pages/DSA";
 import Projects from "./pages/Projects";
 import Sidebar from "./components/layout/Sidebar";
 import Topbar from "./components/layout/Topbar";
+import GlobalTimerCompletion from "./components/GlobalTimerCompletion";
+
+import { useState } from "react";
 
 function App() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <div className="app-layout">
-      <Sidebar />
+      <Sidebar isOpen={mobileMenuOpen} setIsOpen={setMobileMenuOpen} />
 
       <div className="main-content">
-        <Topbar />
+        <Topbar toggleMenu={() => setMobileMenuOpen(!mobileMenuOpen)} />
 
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -36,6 +41,8 @@ function App() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </div>
+
+      <GlobalTimerCompletion />
     </div>
   );
 }

@@ -94,9 +94,9 @@ export default function ActivityLog() {
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h2>Concrete Outcomes & Activity Log</h2>
+          <h2>Daily Learning Feed</h2>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "4px" }}>
-            Record actual outcomes completed, log invested minutes, and evaluate session quality.
+            A timeline of your actual completed outcomes, learning insights, and invested time.
           </p>
         </div>
 
@@ -227,10 +227,37 @@ export default function ActivityLog() {
                     <p style={{ fontSize: "0.9rem", color: "#fff", fontWeight: 600 }}>{act.desc}</p>
                     <div style={{ display: "flex", gap: "1rem", fontSize: "0.7rem", color: "var(--text-secondary)", marginTop: "2px" }}>
                       <span>Track: <strong>{track ? track.title : "General"}</strong></span>
-                      {track && (
-                        <span>Auto-Incremented progress by: <strong>+{act.progressIncrement} {track.unit}</strong></span>
+                      {act.progressIncrement > 0 && (
+                        <span>Auto-Incremented progress by: <strong>+{act.progressIncrement} {track?.unit || ""}</strong></span>
                       )}
                     </div>
+                    
+                    {/* Rich Metadata Rendering */}
+                    {(act.confidence > 0 || act.keyTakeaway || act.notes) && (
+                      <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem", background: "rgba(0,0,0,0.2)", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--card-border)" }}>
+                        {act.confidence > 0 && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Confidence</span>
+                            <div style={{ display: "flex" }}>
+                              {[1, 2, 3, 4, 5].map(star => (
+                                <Star key={star} size={12} fill={star <= act.confidence ? "#ffb900" : "none"} color={star <= act.confidence ? "#ffb900" : "var(--text-muted)"} />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {act.keyTakeaway && (
+                          <div style={{ fontSize: "0.8rem", color: "#fff" }}>
+                            <span style={{ fontSize: "0.7rem", color: "var(--accent)", textTransform: "uppercase", marginRight: "0.5rem" }}>Key Takeaway</span>
+                            {act.keyTakeaway}
+                          </div>
+                        )}
+                        {act.notes && (
+                          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
+                            "{act.notes}"
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <button 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
-import { Rocket, Target, Play, Pause, CheckCircle, Flame, Star, Trophy, Clock, FileText } from "lucide-react";
+import { Rocket, Target, Play, Pause, CheckCircle, Star, Trophy, Clock, FileText } from "lucide-react";
 
 export default function ExecutionCenter() {
   const {
@@ -10,6 +10,7 @@ export default function ExecutionCenter() {
     setDailyPlans,
     tracks,
     activityLogs,
+    setActivityLogs,
     settings,
     todayGoalsChecked,
     setTodayGoalsChecked,
@@ -28,8 +29,20 @@ export default function ExecutionCenter() {
     setTimerMode,
     setTimerSeconds,
     timerConfig,
-    setTodayFocusSeconds
+    todayPermanentProgress,
+    setTodayPermanentProgress,
+    timerOverrideLimit,
+    setTimerOverrideLimit,
+    setTracks
   } = useApp();
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [completionData, setCompletionData] = useState({
+    taskId: null,
+    confidence: 0,
+    notes: "",
+    keyTakeaway: "",
+    timeSpentMins: 0
+  });
 
   const todayStr = new Date().toISOString().split("T")[0];
 
@@ -46,33 +59,103 @@ export default function ExecutionCenter() {
 
   const permGoalTasks = Object.keys(permGoalsMap).map(key => ({
     id: `perm-${key}`,
-    title: permGoalsMap[key],
+    title: todayGoalsChecked[key] ? `✓ ${permGoalsMap[key]}` : permGoalsMap[key],
     type: "permanent",
     completed: todayGoalsChecked[key]
   }));
   
   const allPossibleTasks = [
-    ...goals.filter(g => g.category === "daily").map(g => ({ id: g.id, title: g.title, type: "goal", completed: g.completed })),
-    ...todayPlans.map(p => ({ id: p.id, title: `${p.label} (${p.start})`, type: "plan", completed: p.completed })),
+    ...goals.map(g => ({ id: g.id, title: g.completed ? `✓ ${g.title}` : g.title, type: "goal", completed: g.completed })),
+    ...todayPlans.map(p => ({ id: p.id, title: p.completed ? `✓ ${p.label} (${p.start})` : `${p.label} (${p.start})`, type: "plan", completed: p.completed, sourceId: p.sourceId })),
     ...permGoalTasks
   ];
 
   const missionTasks = allPossibleTasks.filter(t => todayMission.includes(t.id));
   const completedMissionCount = missionTasks.filter(g => g.completed).length;
-  const dailyGoalCandidates = allPossibleTasks.filter(t => !t.completed && !todayMission.includes(t.id));
+  const activeMissionCount = missionTasks.length - completedMissionCount;
+  const dailyGoalCandidates = allPossibleTasks.filter(t => !todayMission.includes(t.id));
 
   const toggleMissionSelection = (goalId) => {
     setTodayMission(prev => {
       if (prev.includes(goalId)) {
         return prev.filter(id => id !== goalId);
       } else {
-        if (prev.length >= 3) return prev;
+        if (activeMissionCount >= 3) return prev;
         return [...prev, goalId];
       }
     });
   };
 
-  const markGoalComplete = (task) => {
+  const getPermanentTarget = (key) => {
+    const isOddDay = new Date().getDate() % 2 !== 0;
+    switch(key) {
+      case "dsa": 
+        const baseDsa = settings?.permanentGoals?.dsa || 0;
+        return settings?.oddEvenMode 
+          ? Math.round(baseDsa * (isOddDay ? 1.2 : 0.6) * 60)
+          : Math.round(baseDsa * 60);
+      case "development": 
+        const baseDev = settings?.permanentGoals?.development || 0;
+        return settings?.oddEvenMode 
+          ? Math.round(baseDev * (isOddDay ? 0.5 : 1.5) * 60)
+          : Math.round(baseDev * 60);
+      case "learning": return Math.round((settings?.permanentGoals?.learning || 0) * 60);
+      case "reading": return Math.round((settings?.permanentGoals?.reading || 0) * 2);
+      case "exercise": return Math.round((settings?.permanentGoals?.exercise || 0));
+      default: return 0;
+    }
+  };
+
+  const markGoalComplete = (task, timeSpentMinsOverride = null) => {
+    const timeSpent = timeSpentMinsOverride !== null ? timeSpentMinsOverride : 0;
+
+    if (task.type === "plan" && task.sourceId && task.sourceId.includes("::")) {
+      setCompletionData({
+        task: task,
+        confidence: 0,
+        notes: "",
+        keyTakeaway: "",
+        timeSpentMins: timeSpent
+      });
+      setShowCompletionModal(true);
+      return;
+    }
+
+    if (task.type === "permanent") {
+      const key = task.id.replace("perm-", "");
+      const target = getPermanentTarget(key);
+      const newProgress = (todayPermanentProgress[key] || 0) + timeSpent;
+      
+      setTodayPermanentProgress(prev => ({
+        ...prev,
+        [key]: newProgress
+      }));
+
+      if (timeSpent > 0) {
+        const act = {
+          id: `act-${Date.now()}`,
+          taskId: task.id,
+          date: todayStr,
+          durationMinutes: timeSpent,
+          desc: `Logged ${timeSpent}m on ${task.title}`,
+          mode: "focus"
+        };
+        setActivityLogs(prev => [...prev, act]);
+      }
+
+      if (target > 0 && newProgress < target) {
+        if (currentFocusTask === task.id) {
+          setCurrentFocusTask(null);
+          setTimerIsRunning(false);
+        }
+        return;
+      }
+    }
+    
+    executeCompletion(task);
+  };
+
+  const executeCompletion = (task) => {
     if (task.type === "plan") {
       setDailyPlans(prev => {
         const plans = prev[todayStr] || [];
@@ -94,20 +177,134 @@ export default function ExecutionCenter() {
     }
   };
 
-  // --- 2. Current Focus Logic ---
+  const handleModalSubmit = (e) => {
+    e.preventDefault();
+    const task = completionData.task;
+    const [trackId, itemId] = task.sourceId.split("::");
+
+    let isTaskFullyComplete = false;
+
+    setTracks(prev => prev.map(t => {
+      if (t.id === trackId) {
+        const updatedTasks = t.tasks.map(item => {
+          if (item.id === itemId) {
+            const target = item.targetTimeMins || 0;
+            const newTimeSpent = (item.timeSpentMins || 0) + parseInt(completionData.timeSpentMins, 10);
+            const isNowComplete = target === 0 || newTimeSpent >= target;
+            isTaskFullyComplete = isNowComplete;
+
+            return {
+              ...item,
+              status: isNowComplete ? (t.category === "dsa" ? "Solved" : "Completed") : item.status,
+              confidence: completionData.confidence || item.confidence,
+              notes: completionData.notes || item.notes,
+              keyTakeaway: completionData.keyTakeaway || item.keyTakeaway,
+              timeSpentMins: newTimeSpent,
+              dateCompleted: isNowComplete ? todayStr : item.dateCompleted,
+              needsRevision: isNowComplete ? (completionData.confidence > 0 && completionData.confidence <= 3) : item.needsRevision
+            };
+          }
+          return item;
+        });
+
+        const completedCount = updatedTasks.filter(item => 
+          ["Completed", "Solved", "Mastered", "Applied", "Revised"].includes(item.status)
+        ).length;
+
+        return { ...t, tasks: updatedTasks, progress: t.category === "project" ? t.progress : completedCount };
+      }
+      return t;
+    }));
+
+    const act = {
+      id: `act-${Date.now()}`,
+      taskId: task.id,
+      date: todayStr,
+      durationMinutes: completionData.timeSpentMins,
+      desc: `Logged ${completionData.timeSpentMins}m on ${task.title}`,
+      mode: "focus",
+      confidence: completionData.confidence,
+      keyTakeaway: completionData.keyTakeaway,
+      notes: completionData.notes,
+      trackId: trackId
+    };
+    setActivityLogs(prev => [...prev, act]);
+
+    if (isTaskFullyComplete) {
+      executeCompletion(task);
+    } else {
+      if (currentFocusTask === task.id) {
+        setCurrentFocusTask(null);
+        setTimerIsRunning(false);
+      }
+    }
+    setShowCompletionModal(false);
+  };
+
   const activeFocusGoal = allPossibleTasks.find(t => t.id === currentFocusTask);
-  const limit = timerConfig[timerMode] || 25 * 60;
+  const limit = timerOverrideLimit !== null ? timerOverrideLimit : (timerConfig[timerMode] || 25 * 60);
   const remainingSeconds = Math.max(0, limit - timerSeconds);
   const mins = Math.floor(remainingSeconds / 60);
   const secs = remainingSeconds % 60;
 
+  const getTaskRemainingMins = (task) => {
+    if (task.type === "permanent") {
+      const key = task.id.replace("perm-", "");
+      const target = getPermanentTarget(key);
+      const spent = todayPermanentProgress[key] || 0;
+      return target > 0 ? target - spent : 0;
+    }
+    if (task.type === "plan" && task.sourceId && task.sourceId.includes("::")) {
+      const [trackId, itemId] = task.sourceId.split("::");
+      const track = tracks.find(t => t.id === trackId);
+      if (track) {
+        const item = track.tasks?.find(m => m.id === itemId);
+        if (item && item.targetTimeMins > 0) {
+          return item.targetTimeMins - (item.timeSpentMins || 0);
+        }
+      }
+    }
+    return 0;
+  };
+
+  const getTaskProgress = (task) => {
+    if (task.type === "permanent") {
+      const key = task.id.replace("perm-", "");
+      const target = getPermanentTarget(key);
+      const spent = todayPermanentProgress[key] || 0;
+      return { spent, target };
+    }
+    if (task.type === "plan" && task.sourceId && task.sourceId.includes("::")) {
+      const [trackId, itemId] = task.sourceId.split("::");
+      const track = tracks.find(t => t.id === trackId);
+      if (track) {
+        const item = track.tasks?.find(m => m.id === itemId);
+        if (item) {
+          return { spent: item.timeSpentMins || 0, target: item.targetTimeMins || 0 };
+        }
+      }
+    }
+    return null;
+  };
+
   const startFocus = (goalId) => {
     setCurrentFocusTask(goalId);
     setTimerMode("focus");
-    setTimerIsRunning(true);
+    
+    const task = allPossibleTasks.find(t => t.id === goalId);
+    if (task) {
+      const remainingMins = getTaskRemainingMins(task);
+      const defaultLimit = timerConfig["focus"];
+      if (remainingMins > 0 && (remainingMins * 60) < defaultLimit) {
+        setTimerOverrideLimit(remainingMins * 60);
+      } else {
+        setTimerOverrideLimit(null);
+      }
+    } else {
+      setTimerOverrideLimit(null);
+    }
   };
 
-  // --- 3. Daily Score Logic ---
   const calculateTodayScore = () => {
     let score = 0;
     const todayActs = activityLogs.filter(a => a.date === todayStr);
@@ -123,17 +320,16 @@ export default function ExecutionCenter() {
           if (track.category === "dsa") score += 30;
           else if (track.category === "project") score += 15;
           else if (track.category === "book") score += 10;
-          else score += 15; // default for course/playlist
+          else score += 15;
         }
       } else {
-        score += 10; // generic activity
+        score += 10;
       }
     });
 
-    // Bonus for completing mission tasks
     score += completedMissionCount * 10;
 
-    return Math.min(100, score); // Cap at 100
+    return Math.min(100, score);
   };
 
   const todayScore = calculateTodayScore();
@@ -154,7 +350,6 @@ export default function ExecutionCenter() {
 
   const rank = getRank(todayScore);
 
-  // --- 4. Daily Reflection Logic ---
   const todayReflection = dailyReflections.find(r => r.date === todayStr) || { well: "", distracted: "", tomorrow: "" };
   const [refWell, setRefWell] = useState(todayReflection.well);
   const [refDist, setRefDist] = useState(todayReflection.distracted);
@@ -175,7 +370,6 @@ export default function ExecutionCenter() {
     alert("Reflection saved securely.");
   };
 
-  // --- 5. Focus Hours Widget Logic ---
   const todayFocusSecs = activityLogs
     .filter(s => s.date === todayStr && s.mode === "focus")
     .reduce((sum, s) => sum + (s.durationMinutes * 60), 0);
@@ -203,10 +397,8 @@ export default function ExecutionCenter() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
         
-        {/* Left Column */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           
-          {/* Section 1: Today's Mission */}
           <div className="glass-card">
             <div className="glass-card-header">
               <h3><Target size={16} /> Today's Mission</h3>
@@ -236,6 +428,19 @@ export default function ExecutionCenter() {
                     </button>
                     <span style={{ textDecoration: task.completed ? "line-through" : "none", color: task.completed ? "var(--text-muted)" : "#fff", fontSize: "0.9rem" }}>
                       {task.title}
+                      {(() => {
+                        const prog = getTaskProgress(task);
+                        if (prog && prog.target > 0) {
+                          const isRunning = timerIsRunning && currentFocusTask === task.id;
+                          const liveSpent = prog.spent + (isRunning ? Math.floor(timerSeconds / 60) : 0);
+                          return (
+                            <span style={{ color: "var(--accent)", fontSize: "0.75rem", padding: "2px 6px", background: "rgba(255,255,255,0.05)", borderRadius: "4px", marginLeft: "8px", textDecoration: "none" }}>
+                              ({liveSpent}/{prog.target}m)
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </span>
                   </div>
                   
@@ -252,14 +457,26 @@ export default function ExecutionCenter() {
               ))}
             </div>
 
-            {todayMission.length < 3 && dailyGoalCandidates.length > 0 && (
+            {dailyGoalCandidates.length > 0 && (
               <div style={{ marginTop: "1.5rem", borderTop: "1px solid var(--card-border)", paddingTop: "1rem" }}>
-                <h4 style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>Available Daily Goals:</h4>
+                <h4 style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>Available Goals & Tasks:</h4>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                   {dailyGoalCandidates.filter(g => !todayMission.includes(g.id)).map(g => (
                     <div key={g.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.4rem", background: "rgba(0,0,0,0.2)", borderRadius: "4px" }}>
-                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "80%" }}>{g.title}</span>
-                      <button onClick={() => toggleMissionSelection(g.id)} style={{ color: "var(--accent)", background: "transparent", fontWeight: "bold" }}>+ Add</button>
+                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "80%" }}>
+                        {g.title}
+                      </span>
+                      <button 
+                        onClick={() => toggleMissionSelection(g.id)} 
+                        disabled={activeMissionCount >= 3}
+                        style={{ 
+                          color: activeMissionCount >= 3 ? "var(--text-muted)" : "var(--accent)", 
+                          background: "transparent", 
+                          fontWeight: "bold",
+                          cursor: activeMissionCount >= 3 ? "not-allowed" : "pointer"
+                        }}>
+                        + Add
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -267,7 +484,6 @@ export default function ExecutionCenter() {
             )}
           </div>
 
-          {/* Section 2: Current Focus */}
           <div className="glass-card" style={{ borderLeft: activeFocusGoal ? "4px solid var(--accent)" : "1px solid var(--card-border)" }}>
             <div className="glass-card-header">
               <h3><Rocket size={16} /> Current Focus</h3>
@@ -275,8 +491,20 @@ export default function ExecutionCenter() {
             
             {activeFocusGoal ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1.5rem", padding: "1rem 0" }}>
-                <div style={{ fontSize: "1.1rem", fontWeight: "bold", textAlign: "center", color: "#fff" }}>
-                  {activeFocusGoal.title}
+                <div style={{ fontSize: "1.1rem", fontWeight: "bold", textAlign: "center", color: "#fff", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <span>{activeFocusGoal.title}</span>
+                  {(() => {
+                    const prog = getTaskProgress(activeFocusGoal);
+                    if (prog && prog.target > 0) {
+                      const liveSpent = prog.spent + Math.floor(timerSeconds / 60);
+                      return (
+                        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                          Progress: <strong style={{ color: "var(--accent)" }}>{liveSpent} / {prog.target}m</strong>
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
                 
                 <div style={{ fontSize: "3rem", fontWeight: "900", fontFamily: "var(--font-mono)", color: "var(--accent)", textShadow: "0 0 20px rgba(var(--accent-rgb), 0.4)" }}>
@@ -287,8 +515,8 @@ export default function ExecutionCenter() {
                   <button onClick={() => setTimerIsRunning(!timerIsRunning)} className="btn-secondary" style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.5rem 1.5rem" }}>
                     {timerIsRunning ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
                   </button>
-                  <button onClick={() => markGoalComplete(activeFocusGoal)} className="btn-primary" style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.5rem 1.5rem", background: "#7fba00", color: "#fff" }}>
-                    <CheckCircle size={14} /> Complete
+                  <button onClick={() => markGoalComplete(activeFocusGoal, Math.floor(timerSeconds / 60))} className="btn-primary" style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.5rem 1.5rem", background: "rgba(255,255,255,0.1)", color: "#fff" }}>
+                    <CheckCircle size={14} /> Finish Early
                   </button>
                 </div>
               </div>
@@ -301,10 +529,8 @@ export default function ExecutionCenter() {
           
         </div>
 
-        {/* Right Column */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           
-          {/* Section 3: Daily Score */}
           <div className="glass-card">
             <div className="glass-card-header">
               <h3><Trophy size={16} /> Daily Score</h3>
@@ -331,7 +557,6 @@ export default function ExecutionCenter() {
             </div>
           </div>
 
-          {/* Focus Hours Widget */}
           <div className="glass-card">
             <div className="glass-card-header">
               <h3><Clock size={16} /> Focus Time Analytics</h3>
@@ -352,7 +577,6 @@ export default function ExecutionCenter() {
             </div>
           </div>
 
-          {/* Section 4: Daily Reflection */}
           <div className="glass-card">
             <div className="glass-card-header">
               <h3><FileText size={16} /> Daily Reflection</h3>
@@ -381,6 +605,71 @@ export default function ExecutionCenter() {
 
         </div>
       </div>
+
+      {showCompletionModal && completionData.task && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <form onSubmit={handleModalSubmit} className="glass-card" style={{ width: "450px", padding: "2rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            <div style={{ textAlign: "center" }}>
+              <h3 style={{ color: "var(--accent)" }}>Task Completed!</h3>
+              <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>{completionData.task.title}</p>
+            </div>
+            
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Confidence Score (1-5)</label>
+              <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginBottom: "1rem" }}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setCompletionData({ ...completionData, confidence: star })}
+                    style={{ background: "none", border: "none", cursor: "pointer" }}
+                  >
+                    <Star fill={star <= completionData.confidence ? "#ffb900" : "none"} color={star <= completionData.confidence ? "#ffb900" : "var(--text-muted)"} size={32} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Time Spent (Minutes)</label>
+              <input 
+                type="number" 
+                value={completionData.timeSpentMins}
+                onChange={e => setCompletionData({ ...completionData, timeSpentMins: e.target.value })}
+                min="1"
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Key Takeaway</label>
+              <input 
+                type="text" 
+                value={completionData.keyTakeaway}
+                onChange={e => setCompletionData({ ...completionData, keyTakeaway: e.target.value })}
+                placeholder="What is the main thing you learned?"
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Notes (Optional)</label>
+              <textarea 
+                value={completionData.notes}
+                onChange={e => setCompletionData({ ...completionData, notes: e.target.value })}
+                placeholder="Any additional thoughts or edge cases..."
+                rows={3}
+                style={{ width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid var(--card-border)", borderRadius: "6px", color: "#fff", padding: "0.5rem", fontSize: "0.85rem" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+              <button type="button" onClick={() => setShowCompletionModal(false)} className="btn-secondary">Cancel</button>
+              <button type="submit" className="btn-primary">Save Insights</button>
+            </div>
+          </form>
+        </div>
+      )}
+
     </div>
   );
 }
