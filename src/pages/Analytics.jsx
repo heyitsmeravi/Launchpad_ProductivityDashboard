@@ -245,7 +245,7 @@ export default function Analytics() {
         </div>
         
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "center", padding: "1rem 0" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px", maxWidth: "250px", width: "100%" }}>
+          <div className="heatmap-grid">
             {heatmapDays.map(day => (
               <div
                 key={day.date}

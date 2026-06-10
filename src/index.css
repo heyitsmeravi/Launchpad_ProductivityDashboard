@@ -1323,3 +1323,6 @@ button {
     grid-template-columns: 1fr !important;
   }
 }
+
+.heatmap-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-width: 250px; width: 100%; margin: 0 auto; }
+

@@ -345,7 +345,7 @@ export default function DSA() {
               </h3>
             </div>
             <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", maxWidth: "250px", width: "100%" }}>
+              <div className="heatmap-grid">
                 {heatmapDays.map(day => (
                   <div
                     key={day.date}
