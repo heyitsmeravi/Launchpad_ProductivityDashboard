@@ -36,7 +36,9 @@ export default function Distractions() {
     timerConfig,
     setTimerConfig,
     todayFocusSeconds,
-    setTodayFocusSeconds
+    setTodayFocusSeconds,
+    timerOverrideLimit,
+    setTimerOverrideLimit
   } = useApp();
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -51,13 +53,23 @@ export default function Distractions() {
     setTimerIsRunning(false);
     setTimerSeconds(0);
     setTimerMode("focus");
+    setTimerOverrideLimit(null);
     setTimerConfig(prev => ({ ...prev, focus: mins * 60 }));
   };
 
   const handleSkip = () => {
     setTimerIsRunning(false);
     setTimerSeconds(0);
-    setTimerMode(prev => prev === "focus" ? "short" : prev === "short" ? "long" : "focus");
+    setTimerMode("focus");
+    setTimerOverrideLimit(null);
+    setTimerConfig(prev => {
+      const currentMins = Math.round(prev.focus / 60);
+      let nextMins = 25;
+      if (currentMins === 25) nextMins = 50;
+      else if (currentMins === 50) nextMins = 90;
+      else if (currentMins === 90) nextMins = 25;
+      return { ...prev, focus: nextMins * 60 };
+    });
   };
 
   const logDistraction = (e) => {
@@ -124,11 +136,11 @@ export default function Distractions() {
   const reports = getReports();
 
   // Pomodoro computations
-  const activeLimitSecs = timerConfig[timerMode];
+  const activeLimitSecs = timerOverrideLimit !== null ? timerOverrideLimit : (timerConfig[timerMode] || 25 * 60);
   const timeRemaining = Math.max(0, activeLimitSecs - timerSeconds);
-  const remainingMins = Math.floor(timeRemaining / 60);
-  const remainingSecs = timeRemaining % 60;
-  const progressRatio = timeRemaining / activeLimitSecs;
+  const remainingMins = Math.floor(timeRemaining / 60) || 0;
+  const remainingSecs = timeRemaining % 60 || 0;
+  const progressRatio = timeRemaining / activeLimitSecs || 0;
   const circleRadius = 55;
   const circleCircumference = 2 * Math.PI * circleRadius;
   const strokeDashoffset = circleCircumference * (1 - progressRatio);

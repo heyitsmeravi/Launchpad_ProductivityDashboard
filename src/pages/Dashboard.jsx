@@ -301,7 +301,8 @@ export default function Dashboard() {
   const skipTimer = () => {
     setTimerIsRunning(false);
     setTimerSeconds(0);
-    setTimerMode(prev => prev === "focus" ? "short" : prev === "short" ? "long" : "focus");
+    setTimerOverrideLimit(null);
+    setTimerMode(prev => prev === "focus" ? "shortBreak" : prev === "shortBreak" ? "longBreak" : "focus");
   };
 
   // 8. Weekly stats chart calculations
