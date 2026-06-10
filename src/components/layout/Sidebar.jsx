@@ -116,6 +116,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
                 key={link.path}
                 to={link.path}
                 className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                onClick={() => { if(window.innerWidth <= 768) setIsOpen(false); }}
               >
                 <Icon size={18} />
                 <span>{link.name}</span>
