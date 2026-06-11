@@ -33,7 +33,8 @@ export default function ExecutionCenter() {
     setTodayPermanentProgress,
     timerOverrideLimit,
     setTimerOverrideLimit,
-    setTracks
+    setTracks,
+    todayFocusSeconds
   } = useApp();
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionData, setCompletionData] = useState({
