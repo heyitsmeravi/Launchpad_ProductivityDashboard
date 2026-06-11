@@ -433,32 +433,48 @@ export const AppProvider = ({ children }) => {
     }
   }, [timerSeconds, timerIsRunning, timerMode, timerConfig, timerActivePlanId]);
 
-  // Midnight checker logic
+  // Midnight checker logic (runs continuously to handle tabs left open overnight)
   useEffect(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
-    const lastDate = localStorage.getItem("lp_last_opened_date_v4");
-    if (lastDate && lastDate !== todayStr) {
-      setTodayFocusSeconds(0);
-      setTodayGoalsChecked({
-        dsa: false,
-        learning: false,
-        development: false,
-        reading: false,
-        exercise: false
-      });
-      setDailyPlans(prev => {
-        if (!prev[todayStr]) {
-          const savedTemplate = localStorage.getItem("lp_saved_plans_template");
-          const templatePlans = savedTemplate ? JSON.parse(savedTemplate) : DEFAULT_PLANS[Object.keys(DEFAULT_PLANS)[0]];
-          return {
-            ...prev,
-            [todayStr]: templatePlans.map(p => ({ ...p, id: "p-" + Date.now() + Math.random().toString().split(".")[1], completed: false }))
-          };
-        }
-        return prev;
-      });
-    }
-    localStorage.setItem("lp_last_opened_date_v4", todayStr);
+    const checkMidnight = () => {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const lastDate = localStorage.getItem("lp_last_opened_date_v4");
+      
+      if (lastDate && lastDate !== todayStr) {
+        setTodayFocusSeconds(0);
+        setTodayGoalsChecked({
+          dsa: false,
+          learning: false,
+          development: false,
+          reading: false,
+          exercise: false
+        });
+        setTodayPermanentProgress({
+          dsa: 0,
+          learning: 0,
+          development: 0,
+          reading: 0,
+          exercise: 0
+        });
+        setDailyPlans(prev => {
+          if (!prev[todayStr]) {
+            const savedTemplate = localStorage.getItem("lp_saved_plans_template");
+            const templatePlans = savedTemplate ? JSON.parse(savedTemplate) : [];
+            return {
+              ...prev,
+              [todayStr]: templatePlans.map(p => ({ ...p, id: "p-" + Date.now() + Math.random().toString().split(".")[1], completed: false }))
+            };
+          }
+          return prev;
+        });
+        localStorage.setItem("lp_last_opened_date_v4", todayStr);
+      } else if (!lastDate) {
+        localStorage.setItem("lp_last_opened_date_v4", todayStr);
+      }
+    };
+
+    checkMidnight(); // Run immediately
+    const interval = setInterval(checkMidnight, 10000); // Check every 10s
+    return () => clearInterval(interval);
   }, []);
 
   // --- 5. SMART RECOMMENDATION ENGINE ---
