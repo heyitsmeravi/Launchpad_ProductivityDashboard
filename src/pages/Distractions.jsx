@@ -41,7 +41,7 @@ export default function Distractions() {
     setTimerOverrideLimit
   } = useApp();
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = new Date().toLocaleDateString("en-CA");
 
   // Forms local states
   const [selectedSource, setSelectedSource] = useState("");

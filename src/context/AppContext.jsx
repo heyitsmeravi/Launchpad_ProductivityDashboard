@@ -105,7 +105,7 @@ export const AppProvider = ({ children }) => {
               confidence: task.completed ? 4 : 0,
               timeSpentMins: 0,
               notes: "",
-              dateCompleted: task.completed ? new Date().toISOString().split("T")[0] : null,
+              dateCompleted: task.completed ? new Date().toLocaleDateString("en-CA") : null,
               needsRevision: false,
               keyTakeaway: "",
               actionItem: "",
@@ -266,14 +266,14 @@ export const AppProvider = ({ children }) => {
 
   // Track today's completed focus seconds
   const [todayFocusSeconds, setTodayFocusSeconds] = useState(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = new Date().toLocaleDateString("en-CA");
     const saved = localStorage.getItem("lp_today_focus_seconds_" + todayStr);
     return saved ? parseInt(saved) : 0;
   });
 
   // Today's goals status (checked permanent goals)
   const [todayGoalsChecked, setTodayGoalsChecked] = useState(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = new Date().toLocaleDateString("en-CA");
     return loadState("lp_today_goals_checked_" + todayStr, {
       dsa: false,
       learning: false,
@@ -285,7 +285,7 @@ export const AppProvider = ({ children }) => {
 
   // Today's permanent goal progress in minutes
   const [todayPermanentProgress, setTodayPermanentProgress] = useState(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = new Date().toLocaleDateString("en-CA");
     return loadState("lp_today_permanent_progress_" + todayStr, {
       dsa: 0,
       learning: 0,
@@ -318,17 +318,17 @@ export const AppProvider = ({ children }) => {
   useEffect(() => saveState("lp_timerOverrideLimit", timerOverrideLimit), [timerOverrideLimit]);
 
   useEffect(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = new Date().toLocaleDateString("en-CA");
     localStorage.setItem("lp_today_focus_seconds_" + todayStr, todayFocusSeconds.toString());
   }, [todayFocusSeconds]);
 
   useEffect(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = new Date().toLocaleDateString("en-CA");
     localStorage.setItem("lp_today_goals_checked_" + todayStr, JSON.stringify(todayGoalsChecked));
   }, [todayGoalsChecked]);
 
   useEffect(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = new Date().toLocaleDateString("en-CA");
     localStorage.setItem("lp_today_permanent_progress_" + todayStr, JSON.stringify(todayPermanentProgress));
   }, [todayPermanentProgress]);
 
@@ -410,7 +410,7 @@ export const AppProvider = ({ children }) => {
       } catch (e) {}
 
       if (timerMode === "focus") {
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = new Date().toLocaleDateString("en-CA");
         const newSession = {
           id: `act-${Date.now()}`,
           taskId: timerActivePlanId,
@@ -436,7 +436,7 @@ export const AppProvider = ({ children }) => {
   // Midnight checker logic (runs continuously to handle tabs left open overnight)
   useEffect(() => {
     const checkMidnight = () => {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = new Date().toLocaleDateString("en-CA");
       const lastDate = localStorage.getItem("lp_last_opened_date_v4");
       
       if (lastDate && lastDate !== todayStr) {
@@ -455,6 +455,7 @@ export const AppProvider = ({ children }) => {
           reading: 0,
           exercise: 0
         });
+        setTodayMission([]);
         setDailyPlans(prev => {
           if (!prev[todayStr]) {
             const savedTemplate = localStorage.getItem("lp_saved_plans_template");
@@ -479,7 +480,7 @@ export const AppProvider = ({ children }) => {
 
   // --- 5. SMART RECOMMENDATION ENGINE ---
   useEffect(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = new Date().toLocaleDateString("en-CA");
     const newNotifications = [];
 
     // A. Check Neglected Tracks (no logged activity for 5+ days)
@@ -508,7 +509,7 @@ export const AppProvider = ({ children }) => {
     for (let i = 0; i < 7; i++) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      last7Days.push(d.toISOString().split("T")[0]);
+      last7Days.push(d.toLocaleDateString("en-CA"));
     }
 
     const last7DaysActivities = activityLogs.filter(a => last7Days.includes(a.date));
@@ -541,7 +542,7 @@ export const AppProvider = ({ children }) => {
     // C. Check Impending Deadlines (next 3 days)
     const threeDaysHence = new Date();
     threeDaysHence.setDate(threeDaysHence.getDate() + 3);
-    const threeDaysHenceStr = threeDaysHence.toISOString().split("T")[0];
+    const threeDaysHenceStr = threeDaysHence.toLocaleDateString("en-CA");
 
     goals.filter(g => !g.completed && g.deadline).forEach(g => {
       if (g.deadline <= threeDaysHenceStr && g.deadline >= todayStr) {
@@ -568,7 +569,7 @@ export const AppProvider = ({ children }) => {
     // D. Execution Slippage (Must Do incomplete from yesterday)
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const yesterdayStr = yesterday.toLocaleDateString("en-CA");
     const yesterdayPlans = dailyPlans[yesterdayStr] || [];
     const incompleteMust = yesterdayPlans.filter(p => p.category === "must" && !p.completed);
     if (incompleteMust.length > 0) {

@@ -55,7 +55,7 @@ export default function Projects() {
       tech: newProject.tech.trim(),
       link: newProject.link.trim(),
       priority: newProject.priority,
-      deadline: newProject.deadline || new Date().toISOString().split("T")[0],
+      deadline: newProject.deadline || new Date().toLocaleDateString("en-CA"),
       hoursInvested: parseInt(newProject.hoursInvested, 10) || 0,
       milestones: milestones,
       status: "idea"

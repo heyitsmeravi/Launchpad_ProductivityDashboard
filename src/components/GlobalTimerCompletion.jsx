@@ -22,7 +22,7 @@ export default function GlobalTimerCompletion() {
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionData, setCompletionData] = useState(null);
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = new Date().toLocaleDateString("en-CA");
 
   const getPermanentTarget = (key) => {
     const isOddDay = new Date().getDate() % 2 !== 0;

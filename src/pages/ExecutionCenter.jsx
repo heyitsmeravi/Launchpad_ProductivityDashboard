@@ -46,7 +46,7 @@ export default function ExecutionCenter() {
     logAsStudy: false
   });
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = new Date().toLocaleDateString("en-CA");
 
   // --- 1. Today's Mission Logic ---
   const todayPlans = dailyPlans[todayStr] || [];

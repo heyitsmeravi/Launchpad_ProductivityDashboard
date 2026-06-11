@@ -49,9 +49,9 @@ export default function FocusCenter() {
   const [customMinutes, setCustomMinutes] = useState(15);
   
   // Custom manual session log
-  const [manualSession, setManualSession] = useState({ date: new Date().toISOString().split("T")[0], mins: 60 });
+  const [manualSession, setManualSession] = useState({ date: new Date().toLocaleDateString("en-CA"), mins: 60 });
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = new Date().toLocaleDateString("en-CA");
 
   // --- Focus Session presets ---
   const applyPreset = (mins) => {
@@ -176,7 +176,7 @@ export default function FocusCenter() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = d.toLocaleDateString("en-CA");
       
       const focusSecs = focusSessions.filter(s => s.date === dateStr).reduce((sum, s) => sum + s.durationSeconds, 0);
       const distractMins = distractions.filter(d => d.date === dateStr).reduce((sum, d) => sum + d.durationMinutes, 0);

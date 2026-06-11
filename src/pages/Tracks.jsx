@@ -708,7 +708,7 @@ export default function Tracks() {
             return { 
               ...m, 
               status: isCompleted ? "Not Started" : "Completed",
-              dateCompleted: isCompleted ? null : new Date().toISOString().split("T")[0]
+              dateCompleted: isCompleted ? null : new Date().toLocaleDateString("en-CA")
             };
           }
           return m;

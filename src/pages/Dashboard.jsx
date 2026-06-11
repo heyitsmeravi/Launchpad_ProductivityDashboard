@@ -84,7 +84,7 @@ export default function Dashboard() {
     document.documentElement.style.setProperty("--accent-rgb", `${r}, ${g}, ${b}`);
   }, [settings?.themeColor]);
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = new Date().toLocaleDateString("en-CA");
   const todayPlansList = dailyPlans?.[todayStr] || [];
 
   const [bypassModalData, setBypassModalData] = useState(null);
@@ -125,7 +125,7 @@ export default function Dashboard() {
     let checkDate = new Date();
     
     while (true) {
-      const dateStr = checkDate.toISOString().split("T")[0];
+      const dateStr = checkDate.toLocaleDateString("en-CA");
       if (solvedDates.has(dateStr)) {
         streak++;
         checkDate.setDate(checkDate.getDate() - 1);
@@ -315,7 +315,7 @@ export default function Dashboard() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = d.toLocaleDateString("en-CA");
 
       const focusSecs = fSessions.filter(s => s && s.date === dateStr && s.mode === "focus").reduce((sum, s) => sum + ((s.durationMinutes * 60) || (s.durationSeconds) || 0), 0);
       const distractMins = dists.filter(dist => dist && dist.date === dateStr).reduce((sum, dist) => sum + (dist.durationMinutes || 0), 0);

@@ -43,7 +43,7 @@ export default function DSA() {
               return { 
                 ...task, 
                 status: isCompleted ? "Not Started" : "Completed",
-                dateCompleted: isCompleted ? null : new Date().toISOString().split("T")[0]
+                dateCompleted: isCompleted ? null : new Date().toLocaleDateString("en-CA")
               };
             }
             return task;
@@ -84,7 +84,7 @@ export default function DSA() {
       difficulty: newProblem.difficulty,
       category: newProblem.category,
       notes: newProblem.notes.trim(),
-      solvedAt: new Date().toISOString().split("T")[0]
+      solvedAt: new Date().toLocaleDateString("en-CA")
     };
 
     setDsaProblems(prev => [problem, ...prev]);
@@ -123,7 +123,7 @@ export default function DSA() {
   // --- Calculate Solve Streak ---
   const calculateStreak = () => {
     let streak = 0;
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = new Date().toLocaleDateString("en-CA");
     
     // Set of dates where at least one problem was solved (combine manual and track)
     const allDates = [...dsaProblems.map(p => p.solvedAt), ...trackCompletedDates];
@@ -131,7 +131,7 @@ export default function DSA() {
     
     let checkDate = new Date();
     while (true) {
-      const dateStr = checkDate.toISOString().split("T")[0];
+      const dateStr = checkDate.toLocaleDateString("en-CA");
       if (solvedDates.has(dateStr)) {
         streak++;
         checkDate.setDate(checkDate.getDate() - 1);
@@ -158,7 +158,7 @@ export default function DSA() {
     for (let i = 27; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = d.toLocaleDateString("en-CA");
       const count = allDates.filter(date => date === dateStr).length;
 
       data.push({

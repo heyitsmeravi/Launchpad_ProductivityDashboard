@@ -8,7 +8,7 @@ export default function ActivityLog() {
   // Local Form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [newActivity, setNewActivity] = useState({
-    date: new Date().toISOString().split("T")[0],
+    date: new Date().toLocaleDateString("en-CA"),
     desc: "",
     trackId: "",
     progressIncrement: 1,
@@ -55,7 +55,7 @@ export default function ActivityLog() {
 
     // Reset form
     setNewActivity({
-      date: new Date().toISOString().split("T")[0],
+      date: new Date().toLocaleDateString("en-CA"),
       desc: "",
       trackId: "",
       progressIncrement: 1,

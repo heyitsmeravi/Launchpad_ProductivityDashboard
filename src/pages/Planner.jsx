@@ -6,7 +6,7 @@ export default function Planner() {
   const { dailyPlans, setDailyPlans, setTimerIsRunning, setTimerMode, setTimerSeconds, setTimerActivePlanId, tracks, projects, goals, dsaProblems } = useApp();
   
   // Date picker state
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA"));
   
   // Create / Edit forms
   const [showAddForm, setShowAddForm] = useState(false);
@@ -173,7 +173,7 @@ export default function Planner() {
           }}
           style={{ width: "auto", padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}
         />
-        {selectedDate === new Date().toISOString().split("T")[0] && (
+        {selectedDate === new Date().toLocaleDateString("en-CA") && (
           <span style={{
             fontSize: "0.7rem",
             background: "rgba(var(--accent-rgb), 0.1)",
@@ -397,7 +397,7 @@ export default function Planner() {
 
           <div style={{ display: "flex", gap: "0.2rem" }}>
             {/* Start Timer Play icon */}
-            {!block.completed && selectedDate === new Date().toISOString().split("T")[0] && (
+            {!block.completed && selectedDate === new Date().toLocaleDateString("en-CA") && (
               <button 
                 onClick={() => startTimerForBlock(block)} 
                 style={{ background: "transparent", color: "var(--accent)" }}

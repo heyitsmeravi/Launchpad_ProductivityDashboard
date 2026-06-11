@@ -11,7 +11,7 @@ export default function Log() {
   // Local Form state
   const [showForm, setShowForm] = useState(false);
   const [newLog, setNewLog] = useState({
-    date: new Date().toISOString().split("T")[0],
+    date: new Date().toLocaleDateString("en-CA"),
     studyDurationMinutes: 240,
     notes: "",
     achievements: "",
@@ -59,7 +59,7 @@ export default function Log() {
     }
 
     setNewLog({
-      date: new Date().toISOString().split("T")[0],
+      date: new Date().toLocaleDateString("en-CA"),
       studyDurationMinutes: 240,
       notes: "",
       achievements: "",
@@ -84,7 +84,7 @@ export default function Log() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = d.toLocaleDateString("en-CA");
       datesList.push(dateStr);
       
       const dayLog = logs.find(l => l.date === dateStr);

@@ -16,7 +16,7 @@ import { TrendingUp, Flame, Calendar, Award, CheckSquare, Target, Zap, Star, Act
 export default function Analytics() {
   const { activityLogs, dailyPlans, distractions, tracks, goals, settings } = useApp();
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = new Date().toLocaleDateString("en-CA");
 
   // --- 1. Compute Stats ---
   
@@ -46,7 +46,7 @@ export default function Analytics() {
     let checkDate = new Date();
     
     while (true) {
-      const dateStr = checkDate.toISOString().split("T")[0];
+      const dateStr = checkDate.toLocaleDateString("en-CA");
       if (solvedDates.has(dateStr)) {
         streak++;
         checkDate.setDate(checkDate.getDate() - 1);
@@ -72,7 +72,7 @@ export default function Analytics() {
     for (let i = 27; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = d.toLocaleDateString("en-CA");
       const count = activityDates.filter(date => date === dateStr).length;
 
       data.push({
@@ -93,7 +93,7 @@ export default function Analytics() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = d.toLocaleDateString("en-CA");
       
       const dayActs = activityLogs.filter(a => a.date === dateStr);
       const studyMins = dayActs.reduce((sum, a) => sum + a.durationMinutes, 0);
