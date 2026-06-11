@@ -42,7 +42,8 @@ export default function ExecutionCenter() {
     confidence: 0,
     notes: "",
     keyTakeaway: "",
-    timeSpentMins: 0
+    timeSpentMins: 0,
+    logAsStudy: false
   });
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -116,7 +117,8 @@ export default function ExecutionCenter() {
         confidence: 0,
         notes: "",
         keyTakeaway: "",
-        timeSpentMins: timeSpent
+        timeSpentMins: timeSpent,
+        logAsStudy: timeSpent === 0 // Defaults to true ONLY if they didn't use the timer
       });
       setShowCompletionModal(true);
       return;
@@ -132,14 +134,15 @@ export default function ExecutionCenter() {
         [key]: newProgress
       }));
 
-      if (timeSpent > 0) {
+      // Only auto-log permanent goal time if it wasn't already tracked by the background timer!
+      if (timeSpent > 0 && timeSpentMinsOverride === null) {
         const act = {
           id: `act-${Date.now()}`,
           taskId: task.id,
           date: todayStr,
           durationMinutes: timeSpent,
           desc: `Logged ${timeSpent}m on ${task.title}`,
-          mode: "focus"
+          mode: "task"
         };
         setActivityLogs(prev => [...prev, act]);
       }
@@ -217,19 +220,21 @@ export default function ExecutionCenter() {
       return t;
     }));
 
-    const act = {
-      id: `act-${Date.now()}`,
-      taskId: task.id,
-      date: todayStr,
-      durationMinutes: completionData.timeSpentMins,
-      desc: `Logged ${completionData.timeSpentMins}m on ${task.title}`,
-      mode: "task",
-      confidence: completionData.confidence,
-      keyTakeaway: completionData.keyTakeaway,
-      notes: completionData.notes,
-      trackId: trackId
-    };
-    setActivityLogs(prev => [...prev, act]);
+    if (completionData.logAsStudy) {
+      const act = {
+        id: `act-${Date.now()}`,
+        taskId: task.id,
+        date: todayStr,
+        durationMinutes: completionData.timeSpentMins,
+        desc: `Logged ${completionData.timeSpentMins}m on ${task.title}`,
+        mode: "task", 
+        confidence: completionData.confidence,
+        keyTakeaway: completionData.keyTakeaway,
+        notes: completionData.notes,
+        trackId: trackId
+      };
+      setActivityLogs(prev => [...prev, act]);
+    }
 
     if (isTaskFullyComplete) {
       executeCompletion(task);
@@ -371,7 +376,6 @@ export default function ExecutionCenter() {
     alert("Reflection saved securely.");
   };
 
-  // Use todayFocusSeconds from context directly to prevent any activityLog mismatch
   const todayFocusSecs = todayFocusSeconds;
 
   const last7DaysSecs = activityLogs
