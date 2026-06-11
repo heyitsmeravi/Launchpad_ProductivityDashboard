@@ -222,7 +222,7 @@ export default function ExecutionCenter() {
       date: todayStr,
       durationMinutes: completionData.timeSpentMins,
       desc: `Logged ${completionData.timeSpentMins}m on ${task.title}`,
-      mode: "focus",
+      mode: "task",
       confidence: completionData.confidence,
       keyTakeaway: completionData.keyTakeaway,
       notes: completionData.notes,
@@ -370,9 +370,8 @@ export default function ExecutionCenter() {
     alert("Reflection saved securely.");
   };
 
-  const todayFocusSecs = activityLogs
-    .filter(s => s.date === todayStr && s.mode === "focus")
-    .reduce((sum, s) => sum + (s.durationMinutes * 60), 0);
+  // Use todayFocusSeconds from context directly to prevent any activityLog mismatch
+  const todayFocusSecs = todayFocusSeconds;
 
   const last7DaysSecs = activityLogs
     .filter(s => {
@@ -380,7 +379,7 @@ export default function ExecutionCenter() {
       const diff = (new Date() - d) / (1000 * 60 * 60 * 24);
       return diff <= 7 && s.mode === "focus";
     })
-    .reduce((sum, s) => sum + (s.durationMinutes * 60), 0);
+    .reduce((sum, s) => sum + ((s.durationMinutes * 60) || (s.durationSeconds) || 0), 0);
 
   const weeklyAvgSecs = last7DaysSecs / 7;
 

@@ -317,7 +317,7 @@ export default function Dashboard() {
       d.setDate(today.getDate() - i);
       const dateStr = d.toISOString().split("T")[0];
 
-      const focusSecs = fSessions.filter(s => s && s.date === dateStr && s.mode === "focus").reduce((sum, s) => sum + (s.durationSeconds || 0), 0);
+      const focusSecs = fSessions.filter(s => s && s.date === dateStr && s.mode === "focus").reduce((sum, s) => sum + ((s.durationMinutes * 60) || (s.durationSeconds) || 0), 0);
       const distractMins = dists.filter(dist => dist && dist.date === dateStr).reduce((sum, dist) => sum + (dist.durationMinutes || 0), 0);
 
       data.push({

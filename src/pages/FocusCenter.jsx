@@ -26,8 +26,8 @@ import {
 
 export default function FocusCenter() {
   const {
-    focusSessions,
-    setFocusSessions,
+    activityLogs,
+    setActivityLogs,
     distractions,
     setDistractions,
     timerSeconds,
@@ -80,22 +80,22 @@ export default function FocusCenter() {
 
   // --- Accumulated Focus Statistics ---
   const getFocusStats = () => {
-    const todaySeconds = focusSessions.filter(s => s.date === todayStr).reduce((sum, s) => sum + s.durationSeconds, 0);
+    const fSessions = activityLogs ? activityLogs.filter(a => a.mode === "focus") : [];
     
-    // Last 7 days
+    const todaySecs = todayFocusSeconds;
+    
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const weeklySeconds = focusSessions.filter(s => new Date(s.date) >= sevenDaysAgo).reduce((sum, s) => sum + s.durationSeconds, 0);
+    const weeklySecs = fSessions.filter(s => new Date(s.date) >= sevenDaysAgo).reduce((sum, s) => sum + ((s.durationMinutes * 60) || s.durationSeconds || 0), 0);
 
-    // Last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const monthlySeconds = focusSessions.filter(s => new Date(s.date) >= thirtyDaysAgo).reduce((sum, s) => sum + s.durationSeconds, 0);
+    const monthlySecs = fSessions.filter(s => new Date(s.date) >= thirtyDaysAgo).reduce((sum, s) => sum + ((s.durationMinutes * 60) || s.durationSeconds || 0), 0);
 
     return {
-      today: (todaySeconds / 3600).toFixed(1),
-      weekly: (weeklySeconds / 3600).toFixed(1),
-      monthly: (monthlySeconds / 3600).toFixed(1)
+      today: (todaySecs / 3600).toFixed(1),
+      weekly: (weeklySecs / 3600).toFixed(1),
+      monthly: (monthlySecs / 3600).toFixed(1)
     };
   };
 
@@ -138,12 +138,14 @@ export default function FocusCenter() {
     e.preventDefault();
     const secs = manualSession.mins * 60;
     const log = {
+      id: `act-${Date.now()}`,
       date: manualSession.date,
-      durationSeconds: secs,
+      durationMinutes: manualSession.mins,
+      desc: "Manually logged focus session",
       mode: "focus"
     };
 
-    setFocusSessions(prev => [...prev, log]);
+    setActivityLogs(prev => [...prev, log]);
     if (manualSession.date === todayStr) {
       setTodayFocusSeconds(s => s + secs);
     }
