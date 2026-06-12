@@ -203,7 +203,38 @@ export const AppProvider = ({ children }) => {
   // Unified Activity Ledger (Replaces activities and focusSessions)
   const [activityLogs, setActivityLogs] = useState(() => {
     const loaded = loadState("lp_activityLogs", []);
-    return Array.isArray(loaded) ? loaded.filter(Boolean) : [];
+    let logs = Array.isArray(loaded) ? loaded.filter(Boolean) : [];
+    
+    // Deduplicate old logs (cleaning up bug where generic log and specific log fired simultaneously)
+    const toDelete = new Set();
+    const focusLogs = logs.filter(l => l.mode === "focus" || l.mode === "task");
+    
+    for (let i = 0; i < focusLogs.length; i++) {
+      for (let j = i + 1; j < focusLogs.length; j++) {
+        const log1 = focusLogs[i];
+        const log2 = focusLogs[j];
+        
+        if (log1.date === log2.date && log1.durationMinutes === log2.durationMinutes) {
+          const time1 = parseInt(log1.id.replace("act-", "")) || 0;
+          const time2 = parseInt(log2.id.replace("act-", "")) || 0;
+          
+          if (Math.abs(time1 - time2) < 2000) { // within 2 seconds
+            if (log1.desc === "Completed focus session" && log2.desc !== "Completed focus session") {
+              toDelete.add(log1.id);
+            } else if (log2.desc === "Completed focus session" && log1.desc !== "Completed focus session") {
+              toDelete.add(log2.id);
+            }
+          }
+        }
+      }
+    }
+    
+    if (toDelete.size > 0) {
+      logs = logs.filter(l => !toDelete.has(l.id));
+      localStorage.setItem("lp_activityLogs", JSON.stringify(logs));
+    }
+    
+    return logs;
   });
 
   const [distractions, setDistractions] = useState(() => {
