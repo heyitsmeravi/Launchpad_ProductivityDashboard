@@ -103,7 +103,8 @@ export default function GlobalTimerCompletion() {
         confidence: 0,
         notes: "",
         keyTakeaway: "",
-        timeSpentMins: timeSpentMins
+        timeSpentMins: timeSpentMins,
+        logAsStudy: true
       });
       setShowCompletionModal(true);
       return;
@@ -133,8 +134,22 @@ export default function GlobalTimerCompletion() {
         }
         return;
       }
+      
+      executeCompletion(task);
+      return;
     }
     
+    // Generic log for simple goals or simple plans
+    const act = {
+      id: `act-${Date.now()}`,
+      taskId: task.id,
+      date: todayStr,
+      durationMinutes: timeSpentMins,
+      desc: `Logged ${timeSpentMins}m on ${task.title}`,
+      mode: "focus"
+    };
+    setActivityLogs(prev => [...prev, act]);
+
     executeCompletion(task);
   };
 
@@ -177,19 +192,21 @@ export default function GlobalTimerCompletion() {
       return t;
     }));
 
-    const act = {
-      id: `act-${Date.now()}`,
-      taskId: task.id,
-      date: todayStr,
-      durationMinutes: completionData.timeSpentMins,
-      desc: `Logged ${completionData.timeSpentMins}m on ${task.title}`,
-      mode: "focus",
-      confidence: completionData.confidence,
-      keyTakeaway: completionData.keyTakeaway,
-      notes: completionData.notes,
-      trackId: trackId
-    };
-    setActivityLogs(prev => [...prev, act]);
+    if (completionData.logAsStudy) {
+      const act = {
+        id: `act-${Date.now()}`,
+        taskId: task.id,
+        date: todayStr,
+        durationMinutes: completionData.timeSpentMins,
+        desc: `Logged ${completionData.timeSpentMins}m on ${task.title}`,
+        mode: "task",
+        confidence: completionData.confidence,
+        keyTakeaway: completionData.keyTakeaway,
+        notes: completionData.notes,
+        trackId: trackId
+      };
+      setActivityLogs(prev => [...prev, act]);
+    }
 
     if (isTaskFullyComplete) {
       executeCompletion(task);

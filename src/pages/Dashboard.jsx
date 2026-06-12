@@ -144,7 +144,7 @@ export default function Dashboard() {
 
   // 3. Focus and Productivity score
   const todayActs = (activityLogs || []).filter(a => a && a.date === todayStr);
-  const studyActs = todayActs.filter(a => !a.id.includes("auto-exercise"));
+  const studyActs = todayActs.filter(a => a.mode === "focus" || a.mode === "task");
   const todayStudyMinutes = studyActs.reduce((sum, a) => sum + (parseInt(a.durationMinutes, 10) || 0), 0);
   const todayStudyHours = (todayStudyMinutes / 60).toFixed(1);
   const deepWorkHours = (todayFocusSeconds / 3600).toFixed(1);

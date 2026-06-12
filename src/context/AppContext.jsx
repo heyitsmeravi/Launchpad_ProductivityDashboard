@@ -411,15 +411,17 @@ export const AppProvider = ({ children }) => {
 
       if (timerMode === "focus") {
         const todayStr = new Date().toLocaleDateString("en-CA");
-        const newSession = {
-          id: `act-${Date.now()}`,
-          taskId: timerActivePlanId,
-          date: todayStr,
-          durationMinutes: Math.round(limit / 60),
-          desc: "Completed focus session",
-          mode: "focus"
-        };
-        setActivityLogs(prev => [...prev, newSession]);
+        if (!currentFocusTask) {
+          const newSession = {
+            id: `act-${Date.now()}`,
+            taskId: timerActivePlanId,
+            date: todayStr,
+            durationMinutes: Math.round(limit / 60),
+            desc: "Completed focus session",
+            mode: "focus"
+          };
+          setActivityLogs(prev => [...prev, newSession]);
+        }
 
         if (timerActivePlanId) {
           setDailyPlans(prev => {
@@ -431,7 +433,7 @@ export const AppProvider = ({ children }) => {
         }
       }
     }
-  }, [timerSeconds, timerIsRunning, timerMode, timerConfig, timerActivePlanId]);
+  }, [timerSeconds, timerIsRunning, timerMode, timerConfig, timerActivePlanId, currentFocusTask]);
 
   // Midnight checker logic (runs continuously to handle tabs left open overnight)
   useEffect(() => {
