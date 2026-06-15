@@ -29,7 +29,9 @@ import {
 import {
   ResponsiveContainer,
   BarChart,
+  LineChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   Tooltip as ChartTooltip,
@@ -323,7 +325,7 @@ export default function Dashboard() {
       data.push({
         name: d.toLocaleDateString([], { weekday: "short" }),
         FocusHrs: parseFloat((focusSecs / 3600).toFixed(1)),
-        DistractMins: distractMins
+        DistractHrs: parseFloat((distractMins / 60).toFixed(1))
       });
     }
     return data;
@@ -726,12 +728,23 @@ export default function Dashboard() {
             <div style={{ width: "100%", height: "140px", marginTop: "0.5rem" }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 5, right: 5, left: -28, bottom: 0 }}>
+                  <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={9} tickLine={true} />
+                  <YAxis stroke="var(--text-muted)" fontSize={9} tickLine={true} />
+                  <ChartTooltip wrapperStyle={{ fontSize: "10px" }} cursor={false}/>
+                  <Bar dataKey="FocusHrs" name="Focus Work (Hrs)" fill="var(--accent)" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="DistractHrs" name="Wasted (Hrs)" fill="#ef4444" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ width: "100%", height: "140px", marginTop: "0.5rem" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 5, left: -28, bottom: 0 }}>
                   <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={9} tickLine={false} />
                   <YAxis stroke="var(--text-muted)" fontSize={9} tickLine={false} />
                   <ChartTooltip wrapperStyle={{ fontSize: "10px" }} />
-                  <Bar dataKey="FocusHrs" name="Focus Work (Hrs)" fill="var(--accent)" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="DistractMins" name="Wasted (Mins)" fill="#ef4444" radius={[2, 2, 0, 0]} />
-                </BarChart>
+                  <Line dataKey="FocusHrs" name="Focus Work (Hrs)" stroke="var(--accent)" strokeWidth={2} dot={false} />
+                  <Line dataKey="DistractHrs" name="Wasted (Hrs)" stroke="#ef4444" strokeWidth={2} dot={false} />
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
