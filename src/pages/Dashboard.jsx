@@ -64,7 +64,8 @@ export default function Dashboard() {
     currentFocusTask,
     timerOverrideLimit,
     setTimerOverrideLimit,
-    setTimerMode
+    setTimerMode,
+    activeFocusSession
   } = useApp();
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -265,7 +266,7 @@ export default function Dashboard() {
   const getLiveProgress = (key) => {
     let base = todayPermanentProgress?.[key] || 0;
     if (currentFocusTask === `perm-${key}`) {
-      base += Math.floor(timerSeconds / 60);
+      base += activeFocusSession?.verifiedMinutes || 0;
     }
     return base;
   };
@@ -289,7 +290,7 @@ export default function Dashboard() {
       
       return changed ? next : prev;
     });
-  }, [todayPermanentProgress, timerSeconds, splitRecommendation, setTodayGoalsChecked, currentFocusTask]);
+  }, [todayPermanentProgress, activeFocusSession, splitRecommendation, setTodayGoalsChecked, currentFocusTask]);
 
   // 7. Timer setup
   const activeLimit = timerOverrideLimit !== null ? timerOverrideLimit : (timerConfig?.[timerMode] || 25 * 60);

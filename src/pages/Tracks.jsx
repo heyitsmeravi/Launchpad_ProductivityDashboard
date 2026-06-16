@@ -32,7 +32,8 @@ export default function Tracks() {
     todayGoalsChecked,
     setTodayGoalsChecked,
     timerSeconds,
-    currentFocusTask
+    currentFocusTask,
+    activeFocusSession
   } = useApp();
   
   // Detail View State
@@ -1351,7 +1352,7 @@ export default function Tracks() {
                                       {(() => {
                                         let spent = task.timeSpentMins || 0;
                                         if (currentFocusTask === `plan-${t.id}::${task.id}`) {
-                                          spent += Math.floor(timerSeconds / 60);
+                                          spent += activeFocusSession?.verifiedMinutes || 0;
                                         }
                                         return `(${spent}/${task.targetTimeMins}m)`;
                                       })()}

@@ -34,7 +34,9 @@ export default function ExecutionCenter() {
     timerOverrideLimit,
     setTimerOverrideLimit,
     setTracks,
-    todayFocusSeconds
+    todayFocusSeconds,
+    activeFocusSession,
+    finishFocusSessionEarly
   } = useApp();
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionData, setCompletionData] = useState({
@@ -436,7 +438,7 @@ export default function ExecutionCenter() {
                         const prog = getTaskProgress(task);
                         if (prog && prog.target > 0) {
                           const isRunning = timerIsRunning && currentFocusTask === task.id;
-                          const liveSpent = prog.spent + (isRunning ? Math.floor(timerSeconds / 60) : 0);
+                          const liveSpent = prog.spent + (isRunning ? (activeFocusSession?.verifiedMinutes || 0) : 0);
                           return (
                             <span style={{ color: "var(--accent)", fontSize: "0.75rem", padding: "2px 6px", background: "rgba(255,255,255,0.05)", borderRadius: "4px", marginLeft: "8px", textDecoration: "none" }}>
                               ({liveSpent}/{prog.target}m)
@@ -499,8 +501,8 @@ export default function ExecutionCenter() {
                   <span>{activeFocusGoal.title}</span>
                   {(() => {
                     const prog = getTaskProgress(activeFocusGoal);
-                    if (prog && prog.target > 0) {
-                      const liveSpent = prog.spent + Math.floor(timerSeconds / 60);
+                     if (prog && prog.target > 0) {
+                       const liveSpent = prog.spent + (activeFocusSession?.verifiedMinutes || 0);
                       return (
                         <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "4px" }}>
                           Progress: <strong style={{ color: "var(--accent)" }}>{liveSpent} / {prog.target}m</strong>
@@ -519,7 +521,7 @@ export default function ExecutionCenter() {
                   <button onClick={() => setTimerIsRunning(!timerIsRunning)} className="btn-secondary" style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.5rem 1.5rem" }}>
                     {timerIsRunning ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
                   </button>
-                  <button onClick={() => markGoalComplete(activeFocusGoal, Math.floor(timerSeconds / 60))} className="btn-primary" style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.5rem 1.5rem", background: "rgba(255,255,255,0.1)", color: "#fff" }}>
+                  <button onClick={finishFocusSessionEarly} className="btn-primary" style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.5rem 1.5rem", background: "rgba(255,255,255,0.1)", color: "#fff" }}>
                     <CheckCircle size={14} /> Finish Early
                   </button>
                 </div>

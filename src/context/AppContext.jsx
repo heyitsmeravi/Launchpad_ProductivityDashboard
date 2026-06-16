@@ -96,7 +96,6 @@ export const AppProvider = ({ children }) => {
           track.tasks = track.tasks.map(task => {
             // Check if it's already the new format
             if (task.status !== undefined && task.confidence !== undefined) return task;
-            
             // Migrate from old { id, text, completed } format
             return {
               id: task.id || "item-" + Math.random().toString(36).substr(2, 9),
@@ -326,6 +325,19 @@ export const AppProvider = ({ children }) => {
     });
   });
 
+  // --- Focus Verification System States ---
+  const [activeFocusSession, setActiveFocusSession] = useState(() => {
+    return loadState("lp_activeFocusSession", null);
+  });
+  const [pendingFocusCheck, setPendingFocusCheck] = useState(() => {
+    return loadState("lp_pendingFocusCheck", null);
+  });
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [timerPausedAt, setTimerPausedAt] = useState(() => {
+    const val = localStorage.getItem("lp_timerPausedAt");
+    return val ? parseInt(val, 10) : null;
+  });
+
   // --- 3. SAVE STATES TO LOCALSTORAGE ---
   useEffect(() => { localStorage.setItem("lp_settings", JSON.stringify(settings)); }, [settings]);
   useEffect(() => { localStorage.setItem("lp_tracks", JSON.stringify(tracks)); }, [tracks]);
@@ -347,6 +359,15 @@ export const AppProvider = ({ children }) => {
   useEffect(() => saveState("lp_timerIsRunning", timerIsRunning), [timerIsRunning]);
   useEffect(() => saveState("lp_timerMode", timerMode), [timerMode]);
   useEffect(() => saveState("lp_timerOverrideLimit", timerOverrideLimit), [timerOverrideLimit]);
+  useEffect(() => saveState("lp_activeFocusSession", activeFocusSession), [activeFocusSession]);
+  useEffect(() => saveState("lp_pendingFocusCheck", pendingFocusCheck), [pendingFocusCheck]);
+  useEffect(() => {
+    if (timerPausedAt !== null) {
+      localStorage.setItem("lp_timerPausedAt", timerPausedAt.toString());
+    } else {
+      localStorage.removeItem("lp_timerPausedAt");
+    }
+  }, [timerPausedAt]);
 
   useEffect(() => {
     const todayStr = new Date().toLocaleDateString("en-CA");
@@ -399,6 +420,134 @@ export const AppProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [timerIsRunning, lastTick, timerMode, timerConfig, timerOverrideLimit]);
 
+  // Helper to get random interval for verification check (7 to 15 minutes)
+  const getRandomInterval = () => {
+    const minMins = 7;
+    const maxMins = 15;
+    const randomMins = minMins + Math.random() * (maxMins - minMins);
+    return Math.floor(randomMins * 60 * 1000);
+    // return Math.floor(80*1000); // For testing: 80 seconds
+  };
+
+  // Helper to determine permanent target limits
+  const getPermanentTarget = (key) => {
+    const isOddDay = new Date().getDate() % 2 !== 0;
+    switch(key) {
+      case "dsa": 
+        const baseDsa = settings?.permanentGoals?.dsa || 0;
+        return settings?.oddEvenMode 
+          ? Math.round(baseDsa * (isOddDay ? 1.2 : 0.6) * 60)
+          : Math.round(baseDsa * 60);
+      case "development": 
+        const baseDev = settings?.permanentGoals?.development || 0;
+        return settings?.oddEvenMode 
+          ? Math.round(baseDev * (isOddDay ? 0.5 : 1.5) * 60)
+          : Math.round(baseDev * 60);
+      case "learning": return Math.round((settings?.permanentGoals?.learning || 0) * 60);
+      case "reading": return Math.round((settings?.permanentGoals?.reading || 0) * 2);
+      case "exercise": return Math.round((settings?.permanentGoals?.exercise || 0));
+      default: return 0;
+    }
+  };
+
+  // Monitor timer starting, pausing, and task changes to initialize active session
+  useEffect(() => {
+    if (timerIsRunning && timerMode === "focus") {
+      // Request notification permission if not asked yet
+      try {
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+          Notification.requestPermission();
+        }
+      } catch (e) {}
+
+      if (!activeFocusSession) {
+        // Start new focus session
+        const newSession = {
+          id: `fs-${Date.now()}`,
+          taskId: currentFocusTask,
+          startTime: Date.now(),
+          lastCheckTime: Date.now(),
+          nextCheckTime: Date.now() + getRandomInterval(),
+          verifiedSeconds: 0,
+          distractedSeconds: 0,
+          breakSeconds: 0,
+          totalElapsedSeconds: 0,
+          mode: "focus"
+        };
+        setActiveFocusSession(newSession);
+        setTimerPausedAt(null);
+      } else if (timerPausedAt) {
+        // Resume session: calculate paused duration and shift check times forward
+        const pauseDuration = Date.now() - timerPausedAt;
+        setActiveFocusSession(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            lastCheckTime: prev.lastCheckTime + pauseDuration,
+            nextCheckTime: prev.nextCheckTime + pauseDuration
+          };
+        });
+        setTimerPausedAt(null);
+      }
+    } else if (!timerIsRunning && timerSeconds > 0 && timerMode === "focus") {
+      // Timer is paused: record pause timestamp
+      setTimerPausedAt(Date.now());
+    }
+  }, [timerIsRunning, timerMode, currentFocusTask]);
+
+  // Periodically check if a focus verification is due
+  useEffect(() => {
+    if (!timerIsRunning || timerMode !== "focus" || !activeFocusSession || pendingFocusCheck) return;
+
+    const limit = timerOverrideLimit !== null ? timerOverrideLimit : timerConfig[timerMode];
+    if (limit < 10 * 60) return; // Disable focus checks for short timers (< 10 minutes)
+
+    if (Date.now() >= activeFocusSession.nextCheckTime) {
+      // Calculate work interval up to nextCheckTime. Ignore any pending time past nextCheckTime.
+      const elapsed = Math.max(0, Math.floor((activeFocusSession.nextCheckTime - activeFocusSession.lastCheckTime) / 1000));
+      
+      // Play soft alert chime
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = audioCtx.currentTime;
+        const playTone = (time, freq, dur) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, time);
+          gain.gain.setValueAtTime(0.15, time); // quiet and soft
+          gain.gain.exponentialRampToValueAtTime(0.01, time + dur);
+          osc.start(time);
+          osc.stop(time + dur);
+        };
+        playTone(now, 587.33, 0.15); // D5
+        playTone(now + 0.12, 880, 0.3); // A5
+      } catch (e) {}
+
+      // Fire HTML5 System Notification
+      try {
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          const n = new Notification("Focus Check-in", {
+            body: "Are you still working? Tap to verify your focus.",
+            requireInteraction: true
+          });
+          n.onclick = () => {
+            window.focus();
+          };
+        }
+      } catch (e) {}
+
+      setPendingFocusCheck({
+        sessionId: activeFocusSession.id,
+        elapsedSeconds: elapsed,
+        isFinal: false
+      });
+    }
+  }, [timerSeconds, timerIsRunning, timerMode, activeFocusSession, pendingFocusCheck, timerOverrideLimit, timerConfig]);
+
+  // Handle ticking limits and final check triggering
   useEffect(() => {
     if (!timerIsRunning) return;
 
@@ -406,9 +555,6 @@ export const AppProvider = ({ children }) => {
     const diff = timerSeconds - prevTimerSecondsRef.current;
 
     if (diff > 0) {
-      if (timerMode === "focus") {
-        setTodayFocusSeconds(s => s + diff);
-      }
       prevTimerSecondsRef.current = timerSeconds;
     }
 
@@ -416,11 +562,9 @@ export const AppProvider = ({ children }) => {
       setTimerIsRunning(false);
       setTimerSeconds(0);
       setTimerOverrideLimit(null);
-      setTimerFinishEvent(prev => ({ tick: (prev.tick || 0) + 1, limitSeconds: limit }));
       
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        
         const playBeep = (time, freq, duration) => {
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
@@ -433,7 +577,6 @@ export const AppProvider = ({ children }) => {
           osc.start(time);
           osc.stop(time + duration);
         };
-
         const now = audioCtx.currentTime;
         playBeep(now, 523.25, 0.4);       // C5
         playBeep(now + 0.4, 659.25, 0.4); // E5
@@ -441,30 +584,266 @@ export const AppProvider = ({ children }) => {
       } catch (e) {}
 
       if (timerMode === "focus") {
-        const todayStr = new Date().toLocaleDateString("en-CA");
-        if (!currentFocusTask) {
-          const newSession = {
-            id: `act-${Date.now()}`,
-            taskId: timerActivePlanId,
-            date: todayStr,
-            durationMinutes: Math.round(limit / 60),
-            desc: "Completed focus session",
-            mode: "focus"
-          };
-          setActivityLogs(prev => [...prev, newSession]);
-        }
-
-        if (timerActivePlanId) {
-          setDailyPlans(prev => {
-            const todayPlans = prev[todayStr] || [];
-            const updated = todayPlans.map(p => p.id === timerActivePlanId ? { ...p, completed: true } : p);
-            return { ...prev, [todayStr]: updated };
+        if (activeFocusSession) {
+          // Calculate the time since lastCheckTime up to when it completed.
+          // Note: if there is already a check pending, we do NOT add any additional time (since it's just been open).
+          setPendingFocusCheck(prev => {
+            if (prev) {
+              return {
+                ...prev,
+                isFinal: true
+              };
+            }
+            const finalElapsed = Math.floor((Date.now() - activeFocusSession.lastCheckTime) / 1000);
+            return {
+              sessionId: activeFocusSession.id,
+              elapsedSeconds: finalElapsed,
+              isFinal: true
+            };
           });
-          setTimerActivePlanId(null);
         }
+      } else {
+        // Just standard finish for breaks
+        setTimerFinishEvent(prev => ({ tick: (prev.tick || 0) + 1, limitSeconds: limit }));
       }
     }
-  }, [timerSeconds, timerIsRunning, timerMode, timerConfig, timerActivePlanId, currentFocusTask]);
+  }, [timerSeconds, timerIsRunning, timerMode, timerConfig, timerActivePlanId, currentFocusTask, activeFocusSession]);
+
+  const finishFocusSessionEarly = () => {
+    setTimerIsRunning(false);
+    if (activeFocusSession) {
+      setPendingFocusCheck(prev => {
+        // If there's already a check pending, just upgrade it to final (no additional time)
+        if (prev) {
+          return {
+            ...prev,
+            isFinal: true
+          };
+        }
+        const finalElapsed = Math.floor((Date.now() - activeFocusSession.lastCheckTime) / 1000);
+        return {
+          sessionId: activeFocusSession.id,
+          elapsedSeconds: finalElapsed,
+          isFinal: true
+        };
+      });
+    } else {
+      setTimerSeconds(0);
+      setTimerOverrideLimit(null);
+    }
+  };
+
+  const answerFocusCheck = (choice, customData = null) => {
+    if (!activeFocusSession || !pendingFocusCheck) return;
+
+    const elapsed = pendingFocusCheck.elapsedSeconds;
+    const isFinal = pendingFocusCheck.isFinal;
+
+    setActiveFocusSession(prev => {
+      if (!prev) return null;
+      const updated = { ...prev };
+      
+      if (choice === "working") {
+        updated.verifiedSeconds = (updated.verifiedSeconds || 0) + elapsed;
+        updated.verifiedMinutes = Math.floor(updated.verifiedSeconds / 60);
+        setTodayFocusSeconds(s => s + elapsed);
+      } else if (choice === "distracted") {
+        updated.distractedSeconds = (updated.distractedSeconds || 0) + elapsed;
+      } else if (choice === "break") {
+        updated.breakSeconds = (updated.breakSeconds || 0) + elapsed;
+      } else if (choice === "custom" && customData) {
+        const { verified, distracted, breakTime } = customData;
+        updated.verifiedSeconds = (updated.verifiedSeconds || 0) + verified;
+        updated.verifiedMinutes = Math.floor(updated.verifiedSeconds / 60);
+        updated.distractedSeconds = (updated.distractedSeconds || 0) + distracted;
+        updated.breakSeconds = (updated.breakSeconds || 0) + breakTime;
+        setTodayFocusSeconds(s => s + verified);
+      }
+      
+      updated.totalElapsedSeconds = (updated.totalElapsedSeconds || 0) + elapsed;
+      updated.lastCheckTime = Date.now();
+      updated.nextCheckTime = Date.now() + getRandomInterval();
+      
+      return updated;
+    });
+
+    setPendingFocusCheck(null);
+
+    if (isFinal) {
+      setShowSummaryModal(true);
+    }
+  };
+
+  const saveFocusSession = (reflection, planConfidence, planKeyTakeaway, planNotes) => {
+    if (!activeFocusSession) return;
+
+    const verifiedMins = activeFocusSession.verifiedSeconds > 0 
+      ? Math.max(1, Math.round(activeFocusSession.verifiedSeconds / 60)) 
+      : 0;
+    const distractedMins = Math.round(activeFocusSession.distractedSeconds / 60);
+    const breakMins = Math.round(activeFocusSession.breakSeconds / 60);
+    const totalElapsedMins = Math.round(activeFocusSession.totalElapsedSeconds / 60);
+    const focusScore = Math.round(
+      (activeFocusSession.verifiedSeconds / 
+       (activeFocusSession.verifiedSeconds + activeFocusSession.distractedSeconds || 1)) * 100
+    );
+
+    const todayStr = new Date().toLocaleDateString("en-CA");
+    const taskId = activeFocusSession.taskId;
+
+    if (taskId) {
+      if (taskId.startsWith("perm-")) {
+        const key = taskId.replace("perm-", "");
+        const target = getPermanentTarget(key);
+        const newProgress = (todayPermanentProgress[key] || 0) + verifiedMins;
+        
+        setTodayPermanentProgress(prev => ({
+          ...prev,
+          [key]: newProgress
+        }));
+
+        if (target > 0 && newProgress >= target) {
+          setTodayGoalsChecked(prev => ({ ...prev, [key]: true }));
+        }
+
+        const act = {
+          id: `act-${Date.now()}`,
+          taskId: taskId,
+          date: todayStr,
+          durationMinutes: verifiedMins,
+          desc: `Logged ${verifiedMins}m on ${key.toUpperCase()} Target`,
+          mode: "focus",
+          focusScore,
+          reflection,
+          verifiedMinutes: verifiedMins,
+          distractedMinutes: distractedMins,
+          breakMinutes: breakMins,
+          totalElapsedMinutes: totalElapsedMins
+        };
+        setActivityLogs(prev => [...prev, act]);
+
+      } else if (taskId.startsWith("plan-")) {
+        const sourceId = taskId.replace("plan-", "");
+        if (sourceId.includes("::")) {
+          const [trackId, itemId] = sourceId.split("::");
+          
+          let isTaskFullyComplete = false;
+          setTracks(prev => prev.map(t => {
+            if (t.id === trackId) {
+              const updatedTasks = t.tasks.map(item => {
+                if (item.id === itemId) {
+                  const target = item.targetTimeMins || 0;
+                  const newTimeSpent = (item.timeSpentMins || 0) + verifiedMins;
+                  const isNowComplete = target === 0 || newTimeSpent >= target;
+                  isTaskFullyComplete = isNowComplete;
+
+                  return {
+                    ...item,
+                    status: isNowComplete ? (t.category === "dsa" ? "Solved" : "Completed") : item.status,
+                    confidence: planConfidence || item.confidence,
+                    notes: planNotes || item.notes,
+                    keyTakeaway: planKeyTakeaway || item.keyTakeaway,
+                    timeSpentMins: newTimeSpent,
+                    dateCompleted: isNowComplete ? todayStr : item.dateCompleted,
+                    needsRevision: isNowComplete ? (planConfidence > 0 && planConfidence <= 3) : item.needsRevision
+                  };
+                }
+                return item;
+              });
+
+              const completedCount = updatedTasks.filter(item => 
+                ["Completed", "Solved", "Mastered", "Applied", "Revised"].includes(item.status)
+              ).length;
+
+              return { ...t, tasks: updatedTasks, progress: t.category === "project" ? t.progress : completedCount };
+            }
+            return t;
+          }));
+
+          const act = {
+            id: `act-${Date.now()}`,
+            taskId: taskId,
+            date: todayStr,
+            durationMinutes: verifiedMins,
+            desc: `Logged ${verifiedMins}m on plan task`,
+            mode: "task",
+            trackId,
+            confidence: planConfidence,
+            keyTakeaway: planKeyTakeaway,
+            notes: planNotes,
+            focusScore,
+            reflection,
+            verifiedMinutes: verifiedMins,
+            distractedMinutes: distractedMins,
+            breakMinutes: breakMins,
+            totalElapsedMinutes: totalElapsedMins
+          };
+          setActivityLogs(prev => [...prev, act]);
+
+          if (isTaskFullyComplete) {
+            setDailyPlans(prev => {
+              const plans = prev[todayStr] || [];
+              return {
+                ...prev,
+                [todayStr]: plans.map(p => p.id === taskId ? { ...p, completed: true } : p)
+              };
+            });
+          }
+        }
+      } else {
+        setGoals(prev => prev.map(g => g.id === taskId ? { ...g, completed: true } : g));
+
+        const act = {
+          id: `act-${Date.now()}`,
+          taskId: taskId,
+          date: todayStr,
+          durationMinutes: verifiedMins,
+          desc: `Logged ${verifiedMins}m on Goal`,
+          mode: "focus",
+          focusScore,
+          reflection,
+          verifiedMinutes: verifiedMins,
+          distractedMinutes: distractedMins,
+          breakMinutes: breakMins,
+          totalElapsedMinutes: totalElapsedMins
+        };
+        setActivityLogs(prev => [...prev, act]);
+      }
+    } else {
+      const act = {
+        id: `act-${Date.now()}`,
+        date: todayStr,
+        durationMinutes: verifiedMins,
+        desc: "Completed focus session",
+        mode: "focus",
+        focusScore,
+        reflection,
+        verifiedMinutes: verifiedMins,
+        distractedMinutes: distractedMins,
+        breakMinutes: breakMins,
+        totalElapsedMinutes: totalElapsedMins
+      };
+      setActivityLogs(prev => [...prev, act]);
+    }
+
+    setCurrentFocusTask(null);
+    setActiveFocusSession(null);
+    setTimerSeconds(0);
+    setTimerOverrideLimit(null);
+    setTimerActivePlanId(null);
+    setPendingFocusCheck(null);
+    setShowSummaryModal(false);
+  };
+
+  const cancelFocusSession = () => {
+    setCurrentFocusTask(null);
+    setActiveFocusSession(null);
+    setTimerSeconds(0);
+    setTimerOverrideLimit(null);
+    setTimerActivePlanId(null);
+    setPendingFocusCheck(null);
+    setShowSummaryModal(false);
+  };
 
   // Midnight checker logic (runs continuously to handle tabs left open overnight)
   useEffect(() => {
@@ -647,7 +1026,17 @@ export const AppProvider = ({ children }) => {
     dailyReflections, setDailyReflections,
     dsaProblems, setDsaProblems,
     roadmaps, setRoadmaps,
-    projects, setProjects
+    projects, setProjects,
+
+    // Focus Verification System
+    activeFocusSession, setActiveFocusSession,
+    pendingFocusCheck, setPendingFocusCheck,
+    showSummaryModal, setShowSummaryModal,
+    getPermanentTarget,
+    finishFocusSessionEarly,
+    answerFocusCheck,
+    saveFocusSession,
+    cancelFocusSession
   };
 
   return (

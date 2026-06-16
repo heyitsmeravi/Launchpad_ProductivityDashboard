@@ -3,7 +3,7 @@ import { useApp } from "../context/AppContext";
 import { Plus, Search, ExternalLink, Trash2, Award, Filter, Flame, Calendar, CheckSquare, Layers } from "lucide-react";
 
 export default function DSA() {
-  const { dsaProblems, setDsaProblems, tracks, setTracks, settings, timerSeconds, currentFocusTask } = useApp();
+  const { dsaProblems, setDsaProblems, tracks, setTracks, settings, timerSeconds, currentFocusTask, activeFocusSession } = useApp();
   const pillarName = settings?.pillar1Name || "Problem";
 
   // Form state
@@ -507,7 +507,7 @@ export default function DSA() {
                                     {(() => {
                                       let spent = task.timeSpentMins || 0;
                                       if (currentFocusTask === `plan-${activeRoadmap.id}::${task.id}`) {
-                                        spent += Math.floor(timerSeconds / 60);
+                                        spent += activeFocusSession?.verifiedMinutes || 0;
                                       }
                                       return `(${spent}/${task.targetTimeMins}m)`;
                                     })()}
