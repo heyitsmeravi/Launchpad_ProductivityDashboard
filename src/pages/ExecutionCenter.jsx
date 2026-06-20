@@ -36,7 +36,10 @@ export default function ExecutionCenter() {
     setTracks,
     todayFocusSeconds,
     activeFocusSession,
-    finishFocusSessionEarly
+    finishFocusSessionEarly,
+    mapCategoryToPermanentKey,
+    getTrackDomain,
+    mapTitleToPermanentKey
   } = useApp();
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionData, setCompletionData] = useState({
@@ -187,6 +190,20 @@ export default function ExecutionCenter() {
     e.preventDefault();
     const task = completionData.task;
     const [trackId, itemId] = task.sourceId.split("::");
+
+    const track = tracks.find(t => t.id === trackId);
+    const permKey = track ? getTrackDomain(track) : null;
+    if (permKey) {
+      const mins = parseInt(completionData.timeSpentMins, 10) || 0;
+      setTodayPermanentProgress(prev => {
+        const newProgress = (prev[permKey] || 0) + mins;
+        const target = getPermanentTarget(permKey);
+        if (target > 0 && newProgress >= target) {
+          setTodayGoalsChecked(goals => ({ ...goals, [permKey]: true }));
+        }
+        return { ...prev, [permKey]: newProgress };
+      });
+    }
 
     let isTaskFullyComplete = false;
 

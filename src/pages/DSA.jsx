@@ -1,9 +1,26 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Plus, Search, ExternalLink, Trash2, Award, Filter, Flame, Calendar, CheckSquare, Layers } from "lucide-react";
+import { Plus, Search, ExternalLink, Trash2, Award, Filter, Flame, Calendar, CheckSquare, Layers, Star } from "lucide-react";
 
 export default function DSA() {
-  const { dsaProblems, setDsaProblems, tracks, setTracks, settings, timerSeconds, currentFocusTask, activeFocusSession } = useApp();
+  const { 
+    dsaProblems, 
+    setDsaProblems, 
+    tracks, 
+    setTracks, 
+    settings, 
+    timerSeconds, 
+    currentFocusTask, 
+    activeFocusSession, 
+    setActivityLogs,
+    todayGoalsChecked,
+    setTodayGoalsChecked,
+    todayPermanentProgress,
+    setTodayPermanentProgress,
+    getPermanentTarget,
+    mapCategoryToPermanentKey,
+    getTrackDomain
+  } = useApp();
   const pillarName = settings?.pillar1Name || "Problem";
 
   // Form state
@@ -58,15 +75,94 @@ export default function DSA() {
   const handleCheckboxClick = (roadmapId, task) => {
     const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(task.status);
     if (!isCompleted) {
-      setBypassModalData({ trackId: roadmapId, milestoneId: task.id, title: task.title });
+      setBypassModalData({ 
+        trackId: roadmapId, 
+        milestoneId: task.id, 
+        title: task.title,
+        confidence: 0,
+        notes: "",
+        keyTakeaway: "",
+        timeSpentMins: ""
+      });
     } else {
       toggleRoadmapTask(roadmapId, task.id);
     }
   };
 
-  const handleBypassConfirm = () => {
+  const handleBypassConfirm = (e) => {
+    e.preventDefault();
     if (bypassModalData) {
-      toggleRoadmapTask(bypassModalData.trackId, bypassModalData.milestoneId);
+      const { trackId, milestoneId, title, confidence, notes, keyTakeaway, timeSpentMins } = bypassModalData;
+      const mins = parseInt(timeSpentMins, 10) || 0;
+      const todayStr = new Date().toLocaleDateString("en-CA");
+
+      // Update today's permanent progress if mapped domain exists
+      const trackObj = tracks.find(t => t.id === trackId);
+      const permKey = trackObj ? getTrackDomain(trackObj) : null;
+      if (permKey && mins > 0) {
+        setTodayPermanentProgress(prev => {
+          const newProgress = (prev[permKey] || 0) + mins;
+          const target = getPermanentTarget(permKey);
+          if (target > 0 && newProgress >= target) {
+            setTodayGoalsChecked(goals => ({ ...goals, [permKey]: true }));
+          }
+          return { ...prev, [permKey]: newProgress };
+        });
+      }
+
+      setTracks(prev => prev.map(t => {
+        if (t.id === trackId) {
+          const updatedTasks = (t.tasks || []).map(m => {
+            if (m.id === milestoneId) {
+              const target = m.targetTimeMins || 0;
+              const newTimeSpent = (m.timeSpentMins || 0) + mins;
+              const isNowComplete = target === 0 || newTimeSpent >= target;
+              return { 
+                ...m, 
+                status: isNowComplete ? (t.category === "dsa" ? "Solved" : "Completed") : m.status,
+                confidence: confidence || m.confidence,
+                notes: notes || m.notes,
+                keyTakeaway: keyTakeaway || m.keyTakeaway,
+                timeSpentMins: newTimeSpent,
+                dateCompleted: isNowComplete ? todayStr : m.dateCompleted,
+                needsRevision: isNowComplete ? (confidence > 0 && confidence <= 3) : m.needsRevision
+              };
+            }
+            return m;
+          });
+          
+          const completedCount = updatedTasks.filter(item => 
+            ["Completed", "Solved", "Mastered", "Applied"].includes(item.status)
+          ).length;
+
+          const progress = completedCount;
+          const target = t.category === "project" || t.category === "skill" || t.tasks.length > 0 ? updatedTasks.length : t.target;
+          return {
+            ...t,
+            tasks: updatedTasks,
+            progress,
+            target,
+            status: progress >= target ? "completed" : t.status
+          };
+        }
+        return t;
+      }));
+
+      // Log the activity log
+      const act = {
+        id: `act-${Date.now()}`,
+        taskId: `plan-${trackId}::${milestoneId}`,
+        date: todayStr,
+        durationMinutes: mins,
+        desc: `Logged ${mins}m on ${title}`,
+        mode: "task",
+        confidence: confidence,
+        keyTakeaway: keyTakeaway,
+        notes: notes,
+        trackId: trackId
+      };
+      setActivityLogs(prev => [...prev, act]);
+
       setBypassModalData(null);
     }
   };
@@ -533,28 +629,78 @@ export default function DSA() {
       </div>
 
       {bypassModalData && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: "400px", textAlign: "center" }}>
-            <h3 style={{ color: "#ff4444", marginBottom: "1rem" }}>Manual Bypass Warning</h3>
-            <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "1.5rem", lineHeight: "1.5" }}>
-              Are you lying to yourself? Did you really put in the focused work to earn this completion, or are you just skimming the surface? True progress requires accountability.
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <button 
-                onClick={handleBypassConfirm}
-                className="btn-primary"
-                style={{ background: "#ff4444", color: "#fff", borderColor: "#ff4444" }}
-              >
-                Yes, I did the hard work
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <form onSubmit={handleBypassConfirm} className="modal-content" style={{ maxWidth: "450px", display: "flex", flexDirection: "column", gap: "1.2rem", textAlign: "left" }}>
+            <div style={{ textAlign: "center" }}>
+              <h3 style={{ color: "#ff4444", marginBottom: "0.5rem" }}>Manual Completion & Insights</h3>
+              <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                Are you lying to yourself? Did you really put in the focused work to earn this completion, or are you just skimming the surface? True progress requires accountability.
+              </p>
+              <div style={{ fontSize: "0.95rem", fontWeight: "bold", color: "#fff", marginTop: "0.5rem" }}>
+                Problem: {bypassModalData.title}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Confidence Score (1-5)</label>
+              <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setBypassModalData({ ...bypassModalData, confidence: star })}
+                     style={{ background: "none", border: "none", cursor: "pointer" }}
+                  >
+                    <Star fill={star <= bypassModalData.confidence ? "#ffb900" : "none"} color={star <= bypassModalData.confidence ? "#ffb900" : "var(--text-muted)"} size={24} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Time Spent (Minutes)</label>
+              <input 
+                type="number" 
+                value={bypassModalData.timeSpentMins}
+                onChange={e => setBypassModalData({ ...bypassModalData, timeSpentMins: e.target.value })}
+                min="1"
+                required
+                placeholder="e.g. 30"
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.9rem" }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Key Takeaway (Optional)</label>
+               <input 
+                type="text" 
+                value={bypassModalData.keyTakeaway}
+                onChange={e => setBypassModalData({ ...bypassModalData, keyTakeaway: e.target.value })}
+                placeholder="Main concept you learned..."
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.9rem" }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Notes / Reflection (Optional)</label>
+              <textarea 
+                value={bypassModalData.notes}
+                onChange={e => setBypassModalData({ ...bypassModalData, notes: e.target.value })}
+                placeholder="Any additional notes..."
+                rows={2}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", resize: "none", fontSize: "0.85rem" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <button type="submit" className="btn-primary" style={{ flex: 1, background: "#ff4444", borderColor: "#ff4444", color: "#fff", padding: "0.6rem" }}>
+                Save Completion
               </button>
-              <button 
-                onClick={() => setBypassModalData(null)}
-                className="btn-secondary"
-              >
-                No, I need more time
+              <button type="button" onClick={() => setBypassModalData(null)} className="btn-secondary" style={{ flex: 1, padding: "0.6rem" }}>
+                Cancel
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </div>

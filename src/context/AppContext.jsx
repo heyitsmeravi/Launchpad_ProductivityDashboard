@@ -674,6 +674,93 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const mapCategoryToPermanentKey = (category, title = "") => {
+    if (!category) return null;
+    const cat = category.toLowerCase();
+    const tit = title ? title.toLowerCase() : "";
+
+    // Check for DSA/coding keywords in title if it's not a project
+    const isDsaKeyword = 
+      tit.includes("dsa") || 
+      tit.includes("coding") || 
+      tit.includes("leetcode") || 
+      tit.includes("algo") || 
+      tit.includes("blind") || 
+      tit.includes("roadmap") ||
+      tit.includes("sde");
+
+    if (cat === "dsa" || (cat !== "project" && isDsaKeyword)) return "dsa";
+    if (cat === "project") return "development";
+    if (cat === "course" || cat === "book" || cat === "playlist" || cat === "learning" || cat === "skill") return "learning";
+    return null;
+  };
+
+  const getTrackDomain = (track) => {
+    if (!track) return null;
+    return mapCategoryToPermanentKey(track.category, track.title);
+  };
+
+  const mapTitleToPermanentKey = (title) => {
+    if (!title) return null;
+    const tit = title.toLowerCase();
+
+    // DSA Practice
+    if (
+      tit.includes("dsa") || 
+      tit.includes("coding") || 
+      tit.includes("leetcode") || 
+      tit.includes("algo") || 
+      tit.includes("blind") || 
+      tit.includes("roadmap") ||
+      tit.includes("sde") ||
+      tit.includes("problem solving") ||
+      tit.includes("hackerrank") ||
+      tit.includes("geekforgeeks") ||
+      tit.includes("gfg") ||
+      tit.includes("interview prep")
+    ) {
+      return "dsa";
+    }
+
+    // Development/Project
+    if (
+      tit.includes("project") || 
+      tit.includes("build") || 
+      tit.includes("dev") || 
+      tit.includes("app") || 
+      tit.includes("web") || 
+      tit.includes("design") || 
+      tit.includes("frontend") || 
+      tit.includes("backend") || 
+      tit.includes("fullstack") || 
+      tit.includes("deploy") ||
+      tit.includes("git") ||
+      tit.includes("database") ||
+      tit.includes("api")
+    ) {
+      return "development";
+    }
+
+    // Learning
+    if (
+      tit.includes("course") || 
+      tit.includes("learn") || 
+      tit.includes("study") || 
+      tit.includes("playlist") || 
+      tit.includes("tutorial") || 
+      tit.includes("video") || 
+      tit.includes("lecture") || 
+      tit.includes("read") || 
+      tit.includes("book") || 
+      tit.includes("certification") || 
+      tit.includes("concept")
+    ) {
+      return "learning";
+    }
+
+    return null;
+  };
+
   const saveFocusSession = (reflection, planConfidence, planKeyTakeaway, planNotes) => {
     if (!activeFocusSession) return;
 
@@ -722,11 +809,50 @@ export const AppProvider = ({ children }) => {
         };
         setActivityLogs(prev => [...prev, act]);
 
-      } else if (taskId.startsWith("plan-")) {
-        const sourceId = taskId.replace("plan-", "");
-        if (sourceId.includes("::")) {
-          const [trackId, itemId] = sourceId.split("::");
-          
+      } else if (taskId.startsWith("plan-") || taskId.startsWith("p-")) {
+        const todayStr = new Date().toLocaleDateString("en-CA");
+        const todayPlansList = dailyPlans[todayStr] || [];
+        const planItem = todayPlansList.find(p => p.id === taskId || `plan-${p.id}` === taskId);
+
+        let isTrackMilestone = false;
+        let trackId = "";
+        let itemId = "";
+
+        if (taskId.startsWith("plan-")) {
+          const sourceId = taskId.replace("plan-", "");
+          if (sourceId.includes("::")) {
+            [trackId, itemId] = sourceId.split("::");
+            isTrackMilestone = true;
+          }
+        }
+
+        let track = null;
+        if (isTrackMilestone) {
+          track = tracks.find(t => t.id === trackId);
+        } else if (planItem && planItem.sourceId) {
+          const cleanTrackId = planItem.sourceId.split("::")[0];
+          track = tracks.find(t => t.id === cleanTrackId);
+        }
+
+        let permKey = null;
+        if (track) {
+          permKey = getTrackDomain(track);
+        } else if (planItem) {
+          permKey = mapTitleToPermanentKey(planItem.label) || mapTitleToPermanentKey(planItem.desc);
+        }
+
+        if (permKey) {
+          setTodayPermanentProgress(prev => {
+            const newProgress = (prev[permKey] || 0) + verifiedMins;
+            const target = getPermanentTarget(permKey);
+            if (target > 0 && newProgress >= target) {
+              setTodayGoalsChecked(goals => ({ ...goals, [permKey]: true }));
+            }
+            return { ...prev, [permKey]: newProgress };
+          });
+        }
+
+        if (isTrackMilestone) {
           let isTaskFullyComplete = false;
           setTracks(prev => prev.map(t => {
             if (t.id === trackId) {
@@ -785,20 +911,58 @@ export const AppProvider = ({ children }) => {
               const plans = prev[todayStr] || [];
               return {
                 ...prev,
-                [todayStr]: plans.map(p => p.id === taskId ? { ...p, completed: true } : p)
+                [todayStr]: plans.map(p => (p.id === taskId || `plan-${p.id}` === taskId) ? { ...p, completed: true } : p)
               };
             });
           }
+        } else {
+          // Standalone plan item
+          setDailyPlans(prev => {
+            const plans = prev[todayStr] || [];
+            return {
+              ...prev,
+              [todayStr]: plans.map(p => (p.id === taskId || `plan-${p.id}` === taskId) ? { ...p, completed: true } : p)
+            };
+          });
+
+          const act = {
+            id: `act-${Date.now()}`,
+            taskId: taskId,
+            date: todayStr,
+            durationMinutes: verifiedMins,
+            desc: `Logged ${verifiedMins}m on daily plan task "${planItem?.label || 'Task'}"`,
+            mode: "task",
+            focusScore,
+            reflection,
+            verifiedMinutes: verifiedMins,
+            distractedMinutes: distractedMins,
+            breakMinutes: breakMins,
+            totalElapsedMinutes: totalElapsedMins
+          };
+          setActivityLogs(prev => [...prev, act]);
         }
       } else {
         setGoals(prev => prev.map(g => g.id === taskId ? { ...g, completed: true } : g));
+
+        const goalItem = goals.find(g => g.id === taskId);
+        const permKey = goalItem ? mapTitleToPermanentKey(goalItem.title) : null;
+        if (permKey) {
+          setTodayPermanentProgress(prev => {
+            const newProgress = (prev[permKey] || 0) + verifiedMins;
+            const target = getPermanentTarget(permKey);
+            if (target > 0 && newProgress >= target) {
+              setTodayGoalsChecked(goals => ({ ...goals, [permKey]: true }));
+            }
+            return { ...prev, [permKey]: newProgress };
+          });
+        }
 
         const act = {
           id: `act-${Date.now()}`,
           taskId: taskId,
           date: todayStr,
           durationMinutes: verifiedMins,
-          desc: `Logged ${verifiedMins}m on Goal`,
+          desc: `Logged ${verifiedMins}m on Goal "${goalItem?.title || 'Goal'}"`,
           mode: "focus",
           focusScore,
           reflection,
@@ -1036,7 +1200,10 @@ export const AppProvider = ({ children }) => {
     finishFocusSessionEarly,
     answerFocusCheck,
     saveFocusSession,
-    cancelFocusSession
+    cancelFocusSession,
+    mapCategoryToPermanentKey,
+    getTrackDomain,
+    mapTitleToPermanentKey
   };
 
   return (
