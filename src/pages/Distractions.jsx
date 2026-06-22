@@ -33,12 +33,13 @@ export default function Distractions() {
     setTimerIsRunning,
     timerMode,
     setTimerMode,
-    timerConfig,
-    setTimerConfig,
     todayFocusSeconds,
     setTodayFocusSeconds,
     timerOverrideLimit,
-    setTimerOverrideLimit
+    setTimerOverrideLimit,
+    presetMode,
+    setPresetMode,
+    PRESETS
   } = useApp();
 
   const todayStr = new Date().toLocaleDateString("en-CA");
@@ -49,12 +50,12 @@ export default function Distractions() {
   const [triggerDesc, setTriggerDesc] = useState("");
 
   // Presets
-  const applyPreset = (mins) => {
+  const applyPreset = (mode) => {
     setTimerIsRunning(false);
     setTimerSeconds(0);
     setTimerMode("focus");
     setTimerOverrideLimit(null);
-    setTimerConfig(prev => ({ ...prev, focus: mins * 60 }));
+    setPresetMode(mode);
   };
 
   const handleSkip = () => {
@@ -62,14 +63,13 @@ export default function Distractions() {
     setTimerSeconds(0);
     setTimerMode("focus");
     setTimerOverrideLimit(null);
-    setTimerConfig(prev => {
-      const currentMins = Math.round(prev.focus / 60);
-      let nextMins = 25;
-      if (currentMins === 25) nextMins = 50;
-      else if (currentMins === 50) nextMins = 90;
-      else if (currentMins === 90) nextMins = 25;
-      return { ...prev, focus: nextMins * 60 };
-    });
+    if (presetMode === "pomodoro") {
+    setPresetMode("deep");
+    } else if (presetMode === "deep") {
+    setPresetMode("intense");
+    } else {
+    setPresetMode("pomodoro");
+    }
   };
 
   const logDistraction = (e) => {
@@ -134,7 +134,8 @@ export default function Distractions() {
   };
 
   const reports = getReports();
-
+  
+  const timerConfig=PRESETS[presetMode];
   // Pomodoro computations
   const activeLimitSecs = timerOverrideLimit !== null ? timerOverrideLimit : (timerConfig[timerMode] || 25 * 60);
   const timeRemaining = Math.max(0, activeLimitSecs - timerSeconds);
@@ -224,13 +225,13 @@ export default function Distractions() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
               <h3 style={{ fontSize: "0.8rem", textTransform: "uppercase", color: "#fff", marginBottom: "2px" }}>Timer Presets</h3>
-              <button onClick={() => applyPreset(25)} className="btn-secondary" style={{ padding: "0.4rem", fontSize: "0.75rem", textAlign: "left" }}>
+              <button onClick={() => applyPreset("pomodoro")} className="btn-secondary" style={{ padding: "0.4rem", fontSize: "0.75rem", textAlign: "left" }}>
                 🍅 Standard Focus (25 min)
               </button>
-              <button onClick={() => applyPreset(50)} className="btn-secondary" style={{ padding: "0.4rem", fontSize: "0.75rem", textAlign: "left" }}>
+              <button onClick={() => applyPreset("deep")} className="btn-secondary" style={{ padding: "0.4rem", fontSize: "0.75rem", textAlign: "left" }}>
                 🚀 Deep Study Block (50 min)
               </button>
-              <button onClick={() => applyPreset(90)} className="btn-secondary" style={{ padding: "0.4rem", fontSize: "0.75rem", textAlign: "left" }}>
+              <button onClick={() => applyPreset("intense")} className="btn-secondary" style={{ padding: "0.4rem", fontSize: "0.75rem", textAlign: "left" }}>
                 🧠 High Intensity Session (90 min)
               </button>
             </div>

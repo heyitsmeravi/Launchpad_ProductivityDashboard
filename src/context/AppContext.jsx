@@ -20,6 +20,28 @@ const DEFAULT_SETTINGS = {
   }
 };
 
+// PRESETS
+const DEFAULT_PRESETS = {
+  pomodoro: {
+    focus: 25 * 60,
+    shortBreak: 5 * 60,
+    longBreak: 15 * 60
+  },
+
+  deep: {
+    focus: 50 * 60,
+    shortBreak: 10 * 60,
+    longBreak: 20 * 60
+  },
+
+  intense: {
+    focus: 90 * 60,
+    shortBreak: 15 * 60,
+    longBreak: 30 * 60
+  }
+};
+const PRESETS = JSON.parse(localStorage.getItem("timerPresets")) || DEFAULT_PRESETS;
+
 const DEFAULT_TRACKS = [];
 const DEFAULT_PLANS = {};
 const DEFAULT_GOALS = [];
@@ -283,17 +305,15 @@ export const AppProvider = ({ children }) => {
   const [timerSeconds, setTimerSeconds] = useState(() => loadState("lp_timerSeconds", 0));
   const [timerIsRunning, setTimerIsRunning] = useState(() => loadState("lp_timerIsRunning", false));
   const [timerMode, setTimerMode] = useState(() => loadState("lp_timerMode", "focus")); // focus, shortBreak, longBreak
-  const [timerConfig, setTimerConfig] = useState(() => {
-    return loadState("lp_timerConfig", {
-      focus: 25 * 60,
-      shortBreak: 5 * 60,
-      longBreak: 15 * 60
-    });
-  });
+ 
   const [timerOverrideLimit, setTimerOverrideLimit] = useState(() => loadState("lp_timerOverrideLimit", null)); // Dynamic override in seconds
   const [timerFinishEvent, setTimerFinishEvent] = useState(0); // Counter to trigger events across the app
   const [timerActivePlanId, setTimerActivePlanId] = useState(null);
-
+  const [presetMode, setPresetMode] = useState(() => {
+    const loaded = loadState("lp_presetMode", "pomodoro");
+    return loaded && PRESETS[loaded] ? loaded : "pomodoro";
+  });
+  const timerConfig = PRESETS[presetMode] || PRESETS["pomodoro"];
   // Track today's completed focus seconds
   const [todayFocusSeconds, setTodayFocusSeconds] = useState(() => {
     const todayStr = new Date().toLocaleDateString("en-CA");
@@ -354,7 +374,6 @@ export const AppProvider = ({ children }) => {
   useEffect(() => saveState("lp_dsaProblems", dsaProblems), [dsaProblems]);
   useEffect(() => saveState("lp_roadmaps", roadmaps), [roadmaps]);
   useEffect(() => saveState("lp_projects", projects), [projects]);
-  useEffect(() => saveState("lp_timerConfig", timerConfig), [timerConfig]);
   useEffect(() => saveState("lp_timerSeconds", timerSeconds), [timerSeconds]);
   useEffect(() => saveState("lp_timerIsRunning", timerIsRunning), [timerIsRunning]);
   useEffect(() => saveState("lp_timerMode", timerMode), [timerMode]);
@@ -383,7 +402,7 @@ export const AppProvider = ({ children }) => {
     const todayStr = new Date().toLocaleDateString("en-CA");
     localStorage.setItem("lp_today_permanent_progress_" + todayStr, JSON.stringify(todayPermanentProgress));
   }, [todayPermanentProgress]);
-
+  useEffect(() => saveState("lp_presetMode", presetMode), [presetMode]);
   // --- 4. TIMER TICK EFFECT (Resilient to background throttling) ---
   const [lastTick, setLastTick] = useState(null);
   const prevTimerSecondsRef = useRef(0);
@@ -1173,12 +1192,12 @@ export const AppProvider = ({ children }) => {
     timerSeconds, setTimerSeconds,
     timerIsRunning, setTimerIsRunning,
     timerMode, setTimerMode,
-    timerConfig, setTimerConfig,
+    timerConfig,
     timerOverrideLimit, setTimerOverrideLimit,
     timerFinishEvent, setTimerFinishEvent,
     timerActivePlanId, setTimerActivePlanId,
     todayFocusSeconds, setTodayFocusSeconds,
-
+    presetMode, setPresetMode,
     // Today dynamic goals checked state
     todayGoalsChecked, setTodayGoalsChecked,
 
@@ -1203,7 +1222,9 @@ export const AppProvider = ({ children }) => {
     cancelFocusSession,
     mapCategoryToPermanentKey,
     getTrackDomain,
-    mapTitleToPermanentKey
+    mapTitleToPermanentKey,
+    // Preset
+    PRESETS
   };
 
   return (

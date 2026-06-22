@@ -54,6 +54,8 @@ export default function Dashboard() {
     setTimerIsRunning,
     timerMode,
     timerConfig,
+    setPresetMode,
+    presetMode,
     setTimerSeconds,
     todayFocusSeconds,
     todayGoalsChecked,
@@ -546,10 +548,20 @@ export default function Dashboard() {
             <div className="glass-card-header">
               <h3>Today's Deep Focus</h3>
             </div>
-            
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: "1rem", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.75rem", justifyContent: "center" }}>
+              <button onClick={() => setPresetMode("pomodoro")} className="btn-secondary" style={{ flex: "1", fontSize: "0.75rem", padding: "8px 8px" }}>
+                Pomodoro
+              </button>
+              <button onClick={() => setPresetMode("deep")} className="btn-secondary" style={{ flex: "1", fontSize: "0.75rem", padding: "8px 8px" }}>
+                Deep Work
+              </button>
+              <button onClick={() => setPresetMode("intense")} className="btn-secondary" style={{ flex: "1", fontSize: "0.75rem", padding: "8px 8px" }}>
+                Intense Focus
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.25fr", gap: "1rem", alignItems: "center" }}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <div style={{ width: 110, height: 110, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ width: 125, height: 125, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <svg style={{ transform: "rotate(-90deg)", width: "100%", height: "100%" }} viewBox="0 0 140 140">
                     <circle cx="70" cy="70" r={circleRadius} style={{ fill: "none", stroke: "rgba(255,255,255,0.03)", strokeWidth: 5 }} />
                     <circle
@@ -589,18 +601,20 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                <button onClick={() => { setTimerIsRunning(false); setTimerMode("focus"); setTimerSeconds(0); setTimerOverrideLimit(null); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
-                  Focus Timer ({Math.floor((timerConfig?.focus || 1500) / 60)} min)
+              
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.4rem" }}>
+                <button onClick={() => { setTimerIsRunning(false); setTimerMode("focus"); setTimerSeconds(0); setTimerOverrideLimit(null); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "8px 8px" }}>
+                Focus Timer ({Math.floor((timerConfig?.focus || 1500) / 60)} min)
                 </button>
-                <button onClick={() => { setTimerIsRunning(false); setTimerMode("shortBreak"); setTimerSeconds(0); setTimerOverrideLimit(null); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
-                  Short Break ({Math.floor((timerConfig?.shortBreak || 300) / 60)} min)
+                <button onClick={() => { setTimerIsRunning(false); setTimerMode("shortBreak"); setTimerSeconds(0); setTimerOverrideLimit(null); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "8px 8px" }}>
+                Short Break ({Math.floor((timerConfig?.shortBreak || 300) / 60)} min)
                 </button>
-                <button onClick={() => { setTimerIsRunning(false); setTimerMode("longBreak"); setTimerSeconds(0); setTimerOverrideLimit(null); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "4px 8px" }}>
-                  Long Break ({Math.floor((timerConfig?.longBreak || 900) / 60)} min)
+                <button onClick={() => { setTimerIsRunning(false); setTimerMode("longBreak"); setTimerSeconds(0); setTimerOverrideLimit(null); }} className="btn-secondary" style={{ fontSize: "0.75rem", padding: "8px 8px" }}>
+                Long Break ({Math.floor((timerConfig?.longBreak || 900) / 60)} min)
                 </button>
               </div>
+              
             </div>
           </div>
 

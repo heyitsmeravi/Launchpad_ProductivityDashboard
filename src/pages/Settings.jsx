@@ -5,9 +5,9 @@ import { Settings as SettingsIcon, Save, RefreshCw, Trash2, ShieldAlert, Check }
 export default function Settings() {
   const { 
     settings, 
-    setSettings, 
-    timerConfig, 
-    setTimerConfig 
+    setSettings,
+    PRESETS,
+    presetMode,
   } = useApp();
 
   // Form states
@@ -31,9 +31,9 @@ export default function Settings() {
   const [exerciseGoal, setExerciseGoal] = useState(settings.permanentGoals?.exercise !== undefined ? settings.permanentGoals.exercise : 30);
   
   // Timer states
-  const [focusMin, setFocusMin] = useState(timerConfig?.focus ? timerConfig.focus / 60 : 25);
-  const [shortMin, setShortMin] = useState(timerConfig?.short ? timerConfig.short / 60 : 5);
-  const [longMin, setLongMin] = useState(timerConfig?.long ? timerConfig.long / 60 : 15);
+  const [focusMin, setFocusMin] = useState(PRESETS[presetMode]?.focus ? PRESETS[presetMode].focus / 60 : 25);
+  const [shortMin, setShortMin] = useState(PRESETS[presetMode]?.shortBreak ? PRESETS[presetMode].shortBreak / 60 : 5);
+  const [longMin, setLongMin] = useState(PRESETS[presetMode]?.longBreak ? PRESETS[presetMode].longBreak / 60 : 15);
 
   // Success indicator
   const [showSavedToast, setShowSavedToast] = useState(false);
@@ -75,11 +75,13 @@ export default function Settings() {
     });
 
     // Save timer settings (convert minutes to seconds)
-    setTimerConfig({
-      focus: parseInt(focusMin, 10) * 60,
-      short: parseInt(shortMin, 10) * 60,
-      long: parseInt(longMin, 10) * 60
-    });
+    const updatedPresets = { ...PRESETS };
+    updatedPresets[presetMode] = {
+      focus: parseFloat(focusMin) * 60 || 25 * 60,
+      shortBreak: parseFloat(shortMin) * 60 || 5 * 60,
+      longBreak: parseFloat(longMin) * 60 || 15 * 60
+    };
+    localStorage.setItem("timerPresets", JSON.stringify(updatedPresets)); 
 
     setShowSavedToast(true);
     setTimeout(() => setShowSavedToast(false), 3000);
