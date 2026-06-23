@@ -24,7 +24,10 @@ export default function Sidebar({ isOpen, setIsOpen }) {
     timerIsRunning,
     timerMode,
     timerConfig,
-    setTimerIsRunning
+    setTimerIsRunning,
+    activeFocusSession,
+    finishFocusSessionEarly,
+    tracks
   } = useApp();
 
   const links = [
@@ -49,6 +52,35 @@ export default function Sidebar({ isOpen, setIsOpen }) {
     const secs = remaining % 60;
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
+
+  const getTaskInfo = (taskId) => {
+    if (!taskId) return null;
+    if (taskId.startsWith("perm-")) {
+      const key = taskId.replace("perm-", "");
+      return { id: taskId, type: "permanent", title: key.toUpperCase() + " Target" };
+    }
+    if (taskId.startsWith("plan-")) {
+      const sourceId = taskId.replace("plan-", "");
+      return { id: taskId, type: "plan", title: "Track Task", sourceId };
+    }
+    return { id: taskId, type: "goal", title: "Goal" };
+  };
+
+  const getTaskTitle = (task) => {
+    if (!task) return "Generic Focus Session";
+    if (task.type === "plan" && task.sourceId && task.sourceId.includes("::")) {
+      const [trackId, itemId] = task.sourceId.split("::");
+      const track = tracks.find(t => t.id === trackId);
+      if (track) {
+        const item = track.tasks?.find(i => i.id === itemId);
+        if (item) return item.title || item.text;
+      }
+    }
+    return task.title;
+  };
+
+  const taskInfo = activeFocusSession ? getTaskInfo(activeFocusSession.taskId) : null;
+  const taskTitle = taskInfo ? getTaskTitle(taskInfo) : "";
 
   // Dynamic branding logo rendering based on settings (adapted for targetCompany)
   const renderLogo = () => {
@@ -132,27 +164,73 @@ export default function Sidebar({ isOpen, setIsOpen }) {
           <Timer size={12} className={timerIsRunning ? "animate-pulse" : ""} />
           <span>{timerMode === "focus" ? "Focus" : "Rest"}</span>
         </div>
+        
+        {timerMode === "focus" && taskTitle && (
+          <div style={{ 
+            fontSize: "0.7rem", 
+            color: "#fff", 
+            textAlign: "center", 
+            maxWidth: "100%", 
+            overflow: "hidden", 
+            textOverflow: "ellipsis", 
+            whiteSpace: "nowrap", 
+            marginTop: "2px",
+            fontWeight: "500"
+          }} title={taskTitle}>
+            {taskTitle}
+          </div>
+        )}
+
         <div className="sidebar-timer-time">
           {getRemainingTimeStr()}
         </div>
-        <button 
-          onClick={() => setTimerIsRunning(!timerIsRunning)}
-          style={{
-            background: timerIsRunning ? "rgba(239, 68, 68, 0.15)" : "rgba(var(--accent-rgb), 0.15)",
-            color: timerIsRunning ? "#ef4444" : "var(--accent)",
-            border: timerIsRunning ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(var(--accent-rgb), 0.3)",
-            borderRadius: "4px",
-            padding: "4px 12px",
-            fontSize: "0.75rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-            marginTop: "6px"
-          }}
-        >
-          {timerIsRunning ? <Pause size={10} /> : <Play size={10} />}
-          <span>{timerIsRunning ? "Pause" : "Start"}</span>
-        </button>
+
+        <div style={{ display: "flex", gap: "6px", width: "100%", justifyContent: "center", marginTop: "4px" }}>
+          <button 
+            onClick={() => setTimerIsRunning(!timerIsRunning)}
+            style={{
+              background: timerIsRunning ? "rgba(239, 68, 68, 0.15)" : "rgba(var(--accent-rgb), 0.15)",
+              color: timerIsRunning ? "#ef4444" : "var(--accent)",
+              border: timerIsRunning ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(var(--accent-rgb), 0.3)",
+              borderRadius: "4px",
+              padding: "4px 8px",
+              fontSize: "0.75rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+              flex: 1,
+              justifyContent: "center"
+            }}
+          >
+            {timerIsRunning ? <Pause size={10} /> : <Play size={10} />}
+            <span>{timerIsRunning ? "Pause" : "Start"}</span>
+          </button>
+
+          {timerMode === "focus" && timerIsRunning && activeFocusSession && (
+            <button 
+              onClick={finishFocusSessionEarly}
+              style={{
+                background: "rgba(127, 186, 0, 0.15)",
+                color: "#7fba00",
+                border: "1px solid rgba(127, 186, 0, 0.3)",
+                borderRadius: "4px",
+                padding: "4px 8px",
+                fontSize: "0.75rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                flex: 1,
+                justifyContent: "center"
+              }}
+              title="Finish Focus Session Early"
+            >
+              Finish
+            </button>
+          )}
+        </div>
       </div>
     </aside>
     </>

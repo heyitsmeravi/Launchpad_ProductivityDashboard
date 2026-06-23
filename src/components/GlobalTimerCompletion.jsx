@@ -10,7 +10,14 @@ export default function GlobalTimerCompletion() {
     answerFocusCheck,
     saveFocusSession,
     cancelFocusSession,
-    tracks
+    tracks,
+    timerSeconds,
+    timerIsRunning,
+    setTimerIsRunning,
+    timerMode,
+    timerConfig,
+    timerOverrideLimit,
+    finishFocusSessionEarly
   } = useApp();
 
   const [reflectionText, setReflectionText] = useState("");
@@ -124,6 +131,12 @@ export default function GlobalTimerCompletion() {
   const score = Math.round((verified / (verified + distracted || 1)) * 100);
   const taskInfo = activeFocusSession ? getTaskInfo(activeFocusSession.taskId) : null;
   const taskTitle = taskInfo ? getTaskTitle(taskInfo) : "Generic Focus Session";
+
+  const limit = timerOverrideLimit !== null ? timerOverrideLimit : (timerConfig[timerMode] || 25 * 60);
+  const remainingSeconds = Math.max(0, limit - timerSeconds);
+  const remainingMins = Math.floor(remainingSeconds / 60);
+  const remainingSecs = remainingSeconds % 60;
+  const showFloatingTimer = (activeFocusSession || timerMode === "break") && !pendingFocusCheck && !showSummaryModal;
 
   const handleSaveSession = () => {
     saveFocusSession(reflectionText, planConfidence, planKeyTakeaway, reflectionText);

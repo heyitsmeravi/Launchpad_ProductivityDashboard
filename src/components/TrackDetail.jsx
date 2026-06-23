@@ -1,9 +1,18 @@
 import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { ArrowLeft, Clock, Star, Edit2, CheckCircle, RefreshCw, Bookmark, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Clock, Star, Edit2, CheckCircle, RefreshCw, Bookmark, AlertTriangle, PlayCircle } from "lucide-react";
 
 export default function TrackDetail({ trackId, onBack }) {
-  const { tracks, setTracks } = useApp();
+  const { 
+    tracks, 
+    setTracks,
+    currentFocusTask,
+    setCurrentFocusTask,
+    setTimerMode,
+    setTimerIsRunning,
+    activeFocusSession,
+    setActiveFocusSession
+  } = useApp();
   const track = tracks.find(t => t.id === trackId);
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -159,6 +168,32 @@ export default function TrackDetail({ trackId, onBack }) {
                         <h4 style={{ margin: 0, fontSize: "0.95rem", color: ["Completed", "Solved", "Mastered", "Applied"].includes(task.status) ? "var(--text-muted)" : "#fff", textDecoration: ["Completed", "Solved", "Mastered", "Applied"].includes(task.status) ? "line-through" : "none" }}>
                           {task.title}
                         </h4>
+                        {!["Completed", "Solved", "Mastered", "Applied"].includes(task.status) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const focusTaskId = `plan-${track.id}::${task.id}`;
+                              setCurrentFocusTask(focusTaskId);
+                              setTimerMode("focus");
+                              setTimerIsRunning(true);
+                              if (activeFocusSession) {
+                                setActiveFocusSession(prev => prev ? { ...prev, taskId: focusTaskId } : null);
+                              }
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: currentFocusTask === `plan-${track.id}::${task.id}` ? "var(--accent)" : "rgba(255,255,255,0.4)",
+                              cursor: "pointer",
+                              padding: "2px",
+                              display: "flex",
+                              alignItems: "center"
+                            }}
+                            title="Start Focus Session"
+                          >
+                            <PlayCircle size={14} fill={currentFocusTask === `plan-${track.id}::${task.id}` ? "var(--accent)" : "none"} />
+                          </button>
+                        )}
                       </div>
                       <div style={{ display: "flex", gap: "1rem", fontSize: "0.75rem", color: "var(--text-secondary)", alignItems: "center" }}>
                         <span style={{ color: getStatusColor(task.status), fontWeight: "bold" }}>{task.status}</span>

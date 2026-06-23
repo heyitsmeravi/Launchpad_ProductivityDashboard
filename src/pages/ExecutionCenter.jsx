@@ -36,6 +36,7 @@ export default function ExecutionCenter() {
     setTracks,
     todayFocusSeconds,
     activeFocusSession,
+    setActiveFocusSession,
     finishFocusSessionEarly,
     mapCategoryToPermanentKey,
     getTrackDomain,
@@ -123,7 +124,8 @@ export default function ExecutionCenter() {
         notes: "",
         keyTakeaway: "",
         timeSpentMins: timeSpent,
-        logAsStudy: timeSpent === 0 // Defaults to true ONLY if they didn't use the timer
+        logAsStudy: timeSpent === 0, // Defaults to true ONLY if they didn't use the timer
+        alreadyLogged: false
       });
       setShowCompletionModal(true);
       return;
@@ -193,7 +195,7 @@ export default function ExecutionCenter() {
 
     const track = tracks.find(t => t.id === trackId);
     const permKey = track ? getTrackDomain(track) : null;
-    if (permKey) {
+    if (permKey && !completionData.alreadyLogged) {
       const mins = parseInt(completionData.timeSpentMins, 10) || 0;
       setTodayPermanentProgress(prev => {
         const newProgress = (prev[permKey] || 0) + mins;
@@ -244,8 +246,8 @@ export default function ExecutionCenter() {
         id: `act-${Date.now()}`,
         taskId: task.id,
         date: todayStr,
-        durationMinutes: completionData.timeSpentMins,
-        desc: `Logged ${completionData.timeSpentMins}m on ${task.title}`,
+        durationMinutes: completionData.alreadyLogged ? 0 : completionData.timeSpentMins,
+        desc: completionData.alreadyLogged ? `Completed "${task.title}" (Time already tracked)` : `Logged ${completionData.timeSpentMins}m on ${task.title}`,
         mode: "task", 
         confidence: completionData.confidence,
         keyTakeaway: completionData.keyTakeaway,
@@ -315,6 +317,10 @@ export default function ExecutionCenter() {
   const startFocus = (goalId) => {
     setCurrentFocusTask(goalId);
     setTimerMode("focus");
+    setTimerIsRunning(true);
+    if (activeFocusSession) {
+      setActiveFocusSession(prev => prev ? { ...prev, taskId: goalId } : null);
+    }
     
     const task = allPossibleTasks.find(t => t.id === goalId);
     if (task) {
@@ -662,6 +668,15 @@ export default function ExecutionCenter() {
                 min="1"
                 required
               />
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8rem", color: "var(--text-secondary)", cursor: "pointer", marginTop: "0.6rem" }}>
+                <input 
+                  type="checkbox" 
+                  checked={completionData.alreadyLogged || false} 
+                  onChange={e => setCompletionData({ ...completionData, alreadyLogged: e.target.checked })}
+                  style={{ accentColor: "var(--accent)" }}
+                />
+                Time is already logged via focus timer (prevent double counting)
+              </label>
             </div>
 
             <div>

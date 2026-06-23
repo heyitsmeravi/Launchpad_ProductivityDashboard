@@ -34,12 +34,16 @@ export default function Tracks() {
     setTodayGoalsChecked,
     timerSeconds,
     currentFocusTask,
+    setCurrentFocusTask,
     activeFocusSession,
+    setActiveFocusSession,
     todayPermanentProgress,
     setTodayPermanentProgress,
     getPermanentTarget,
     mapCategoryToPermanentKey,
-    getTrackDomain
+    getTrackDomain,
+    setTimerMode,
+    setTimerIsRunning
   } = useApp();
   
   // Detail View State
@@ -86,6 +90,16 @@ export default function Tracks() {
     description: "",
     status: "learning"
   });
+
+  const startTrackTaskFocus = (trackId, itemId) => {
+    const focusTaskId = `plan-${trackId}::${itemId}`;
+    setCurrentFocusTask(focusTaskId);
+    setTimerMode("focus");
+    setTimerIsRunning(true);
+    if (activeFocusSession) {
+      setActiveFocusSession(prev => prev ? { ...prev, taskId: focusTaskId } : null);
+    }
+  };
 
   // Handle unit automatic defaults
   const handleCategoryChange = (cat, isEdit = false) => {
@@ -769,7 +783,7 @@ export default function Tracks() {
       // Update today's permanent progress if mapped domain exists
       const trackObj = tracks.find(t => t.id === trackId);
       const permKey = trackObj ? getTrackDomain(trackObj) : null;
-      if (permKey && mins > 0) {
+      if (permKey && mins > 0 && !bypassModalData.alreadyLogged) {
         setTodayPermanentProgress(prev => {
           const newProgress = (prev[permKey] || 0) + mins;
           const target = getPermanentTarget(permKey);
@@ -823,8 +837,8 @@ export default function Tracks() {
         id: `act-${Date.now()}`,
         taskId: `plan-${trackId}::${milestoneId}`,
         date: todayStr,
-        durationMinutes: mins,
-        desc: `Logged ${mins}m on ${title}`,
+        durationMinutes: bypassModalData.alreadyLogged ? 0 : mins,
+        desc: bypassModalData.alreadyLogged ? `Completed "${title}" (Time already tracked)` : `Logged ${mins}m on ${title}`,
         mode: "task",
         confidence: confidence,
         keyTakeaway: keyTakeaway,
@@ -1434,6 +1448,28 @@ export default function Tracks() {
                                   onChange={() => handleCheckboxClick(t, task)}
                                 />
                                 <div className="checkbox-box" style={{ width: 10, height: 10, opacity: isCompleted ? 0.5 : 1 }}></div>
+                                {!isCompleted && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      startTrackTaskFocus(t.id, task.id);
+                                    }}
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      color: currentFocusTask === `plan-${t.id}::${task.id}` ? "var(--accent)" : "rgba(255,255,255,0.4)",
+                                      cursor: "pointer",
+                                      padding: "2px",
+                                      display: "flex",
+                                      alignItems: "center"
+                                    }}
+                                    title="Start Focus Session"
+                                  >
+                                    <PlayCircle size={12} fill={currentFocusTask === `plan-${t.id}::${task.id}` ? "var(--accent)" : "none"} />
+                                  </button>
+                                )}
                                 <span style={{ textDecoration: isCompleted ? "line-through" : "none", color: isCompleted ? "var(--text-muted)" : "var(--text-primary)", flex: 1, display: "flex", alignItems: "center", gap: "5px" }}>
                                   {task.title}
                                   {task.targetTimeMins && task.targetTimeMins > 0 && (
@@ -1507,6 +1543,15 @@ export default function Tracks() {
                 placeholder="e.g. 30"
                 style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.9rem" }}
               />
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8rem", color: "var(--text-secondary)", cursor: "pointer", marginTop: "0.6rem" }}>
+                <input 
+                  type="checkbox" 
+                  checked={bypassModalData.alreadyLogged || false} 
+                  onChange={e => setBypassModalData({ ...bypassModalData, alreadyLogged: e.target.checked })}
+                  style={{ accentColor: "var(--accent)" }}
+                />
+                Time is already logged via focus timer (prevent double counting)
+              </label>
             </div>
 
             <div>
