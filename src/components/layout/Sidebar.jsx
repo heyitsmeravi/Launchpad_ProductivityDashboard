@@ -12,7 +12,8 @@ import {
   Timer,
   Rocket,
   Layers,
-  FolderGit2
+  FolderGit2,
+  Sparkles
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
@@ -37,6 +38,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
     { name: "Goals", path: "/goals", icon: Award },
     { name: "Analytics", path: "/analytics", icon: TrendingUp },
     { name: "Activity Log", path: "/activity-log", icon: FileText },
+    { name: "AI Coach", path: "/ai-coach", icon: Sparkles },
     { name: "Problem Solver", path: "/solver", icon: Layers },
     { name: "Projects", path: "/projects", icon: FolderGit2 },
     { name: "Distractions", path: "/distractions", icon: Ban },

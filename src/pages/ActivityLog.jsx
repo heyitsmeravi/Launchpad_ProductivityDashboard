@@ -233,7 +233,7 @@ export default function ActivityLog() {
                     </div>
                     
                     {/* Rich Metadata Rendering */}
-                    {(act.confidence > 0 || act.keyTakeaway || act.notes) && (
+                    {(act.confidence > 0 || act.keyTakeaway || act.notes || act.reflection) && (
                       <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem", background: "rgba(0,0,0,0.2)", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--card-border)" }}>
                         {act.confidence > 0 && (
                           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -254,6 +254,11 @@ export default function ActivityLog() {
                         {act.notes && (
                           <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
                             "{act.notes}"
+                          </div>
+                        )}
+                        {act.reflection && (
+                          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
+                            "{act.reflection}"
                           </div>
                         )}
                       </div>

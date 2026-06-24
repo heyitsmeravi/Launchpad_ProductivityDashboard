@@ -38,6 +38,11 @@ export default function Settings() {
   // Success indicator
   const [showSavedToast, setShowSavedToast] = useState(false);
 
+  // AI settings state
+  const [apiKey, setApiKey] = useState(() => {
+    return localStorage.getItem("lp_geminiApiKey") || "";
+  });
+
   // Preset companies
   const presets = [
     { name: "Microsoft", color: "#00a2ed", slogan: "WIN A GREAT INTERNSHIP → BUILD A CAREER AT MICROSOFT" },
@@ -82,6 +87,7 @@ export default function Settings() {
       longBreak: parseFloat(longMin) * 60 || 15 * 60
     };
     localStorage.setItem("timerPresets", JSON.stringify(updatedPresets)); 
+    localStorage.setItem("lp_geminiApiKey", apiKey.trim());
 
     setShowSavedToast(true);
     setTimeout(() => setShowSavedToast(false), 3000);
@@ -385,6 +391,29 @@ export default function Settings() {
                   required
                 />
               </div>
+            </div>
+          </div>
+
+          {/* AI Settings */}
+          <div className="glass-card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div className="glass-card-header">
+              <h3>AI Advisor Configuration</h3>
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>
+                Gemini API Key
+              </label>
+              <input 
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Enter your Gemini API key (stored locally in your browser)"
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.9rem" }}
+              />
+              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
+                Don't have a key? You can get a free API key from Google AI Studio. Stored strictly in local memory.
+              </span>
             </div>
           </div>
 

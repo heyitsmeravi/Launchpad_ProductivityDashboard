@@ -14,6 +14,7 @@ import Projects from "./pages/Projects";
 import Sidebar from "./components/layout/Sidebar";
 import Topbar from "./components/layout/Topbar";
 import GlobalTimerCompletion from "./components/GlobalTimerCompletion";
+import AIAdvisor from "./pages/AIAdvisor";
 
 import { useState } from "react";
 
@@ -39,6 +40,7 @@ function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/execution" element={<ExecutionCenter />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/ai-coach" element={<AIAdvisor />} />
         </Routes>
       </div>
 
