@@ -38,6 +38,18 @@ export default function AIAdvisor() {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
+  // Disable main-content scroll on this page to prevent viewport cutting
+  useEffect(() => {
+    const mainContent = document.querySelector(".main-content");
+    if (mainContent) {
+      const prevOverflow = mainContent.style.overflow;
+      mainContent.style.overflow = "hidden";
+      return () => {
+        mainContent.style.overflow = prevOverflow;
+      };
+    }
+  }, []);
+
   // Helper to parse simple markdown to JSX safely
   const renderMarkdown = (text) => {
     if (!text) return null;
@@ -284,7 +296,7 @@ Here is their current context:\n${userContext}`;
   };
 
   return (
-    <div className="page-container">
+    <div className="page-container" style={{ height: "calc(100vh - 70px)", padding: "1.5rem 2rem", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "1rem", overflow: "hidden" }}>
       <div className="page-header">
         <div>
           <h2>AI Performance Coach</h2>
@@ -319,10 +331,10 @@ Here is their current context:\n${userContext}`;
           </a>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.2fr", gap: "1.5rem", height: "calc(100vh - 180px)", minHeight: "500px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.2fr", gridTemplateRows: "1fr", gap: "1.5rem", height: "calc(100vh - 210px)", minHeight: 0 }}>
           
           {/* Left Column: Report Logs */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", overflowY: "auto", paddingRight: "0.5rem", minHeight: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", overflowY: "auto", paddingRight: "0.5rem", height: "100%", minHeight: 0 }}>
             {error && (
               <div className="glass-card" style={{ borderLeft: "4px solid #ff4444", padding: "1rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "#ff4444", fontSize: "0.85rem" }}>
                 <ShieldAlert size={16} />
@@ -354,7 +366,7 @@ Here is their current context:\n${userContext}`;
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <div className="report-content" style={{ fontSize: "0.9rem" }}>
+                  <div className="report-content" style={{ fontSize: "0.9rem", display: "flex" ,flexDirection: "column", gap: "0.5rem", overflowY: "auto", maxHeight: "calc(100% - 2rem)" }}>
                     {renderMarkdown(rep.text)}
                   </div>
                 </div>
@@ -371,7 +383,6 @@ Here is their current context:\n${userContext}`;
               </h3>
             </div>
 
-            {/* Chat Box */}
             <div style={{ 
               flex: 1, 
               background: "rgba(0,0,0,0.2)", 
@@ -382,7 +393,8 @@ Here is their current context:\n${userContext}`;
               flexDirection: "column", 
               gap: "0.75rem",
               border: "1px solid rgba(255,255,255,0.03)",
-              marginBottom: "0.75rem"
+              marginBottom: "0.75rem",
+              minHeight: 0
             }}>
               {chatMessages.map((msg, index) => (
                 <div 
