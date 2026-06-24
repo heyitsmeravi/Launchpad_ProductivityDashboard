@@ -43,7 +43,9 @@ export default function Tracks() {
     mapCategoryToPermanentKey,
     getTrackDomain,
     setTimerMode,
-    setTimerIsRunning
+    setTimerIsRunning,
+    dsaProblems,
+    setDsaProblems
   } = useApp();
   
   // Detail View State
@@ -729,6 +731,10 @@ export default function Tracks() {
         const updatedTasks = (t.tasks || []).map(m => {
           if (m.id === milestoneId) {
             const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(m.status);
+            if (isCompleted) {
+              // Remove from dsaProblems
+              setDsaProblems(prev => prev.filter(p => p.roadmapTaskId !== `plan-${trackId}::${milestoneId}`));
+            }
             return { 
               ...m, 
               status: isCompleted ? "Not Started" : "Completed",
@@ -766,7 +772,8 @@ export default function Tracks() {
         confidence: 0,
         notes: "",
         keyTakeaway: "",
-        timeSpentMins: ""
+        timeSpentMins: "",
+        difficulty: task.difficulty || "medium"
       });
     } else {
       toggleMilestone(t.id, task.id);
@@ -776,7 +783,7 @@ export default function Tracks() {
   const handleBypassConfirm = (e) => {
     e.preventDefault();
     if (bypassModalData) {
-      const { trackId, milestoneId, title, confidence, notes, keyTakeaway, timeSpentMins } = bypassModalData;
+      const { trackId, milestoneId, title, confidence, notes, keyTakeaway, timeSpentMins, difficulty } = bypassModalData;
       const mins = parseInt(timeSpentMins, 10) || 0;
       const todayStr = new Date().toLocaleDateString("en-CA");
 
@@ -809,7 +816,8 @@ export default function Tracks() {
                 keyTakeaway: keyTakeaway || m.keyTakeaway,
                 timeSpentMins: newTimeSpent,
                 dateCompleted: isNowComplete ? todayStr : m.dateCompleted,
-                needsRevision: isNowComplete ? (confidence > 0 && confidence <= 3) : m.needsRevision
+                needsRevision: isNowComplete ? (confidence > 0 && confidence <= 3) : m.needsRevision,
+                difficulty: difficulty || m.difficulty || "medium"
               };
             }
             return m;
@@ -846,6 +854,21 @@ export default function Tracks() {
         trackId: trackId
       };
       setActivityLogs(prev => [...prev, act]);
+
+      // If it's a DSA track/domain, auto-log to dsaProblems list
+      if (permKey === "dsa") {
+        const problemEntry = {
+          id: `prob-${Date.now()}`,
+          title: title,
+          link: trackObj?.tasks?.find(m => m.id === milestoneId)?.link || "https://leetcode.com/problems",
+          difficulty: difficulty || "medium",
+          category: trackObj?.title || "Syllabus",
+          notes: notes || "",
+          solvedAt: todayStr,
+          roadmapTaskId: `plan-${trackId}::${milestoneId}`
+        };
+        setDsaProblems(prev => [problemEntry, ...prev]);
+      }
 
       setBypassModalData(null);
     }
@@ -1552,6 +1575,19 @@ export default function Tracks() {
                 />
                 Time is already logged via focus timer (prevent double counting)
               </label>
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Difficulty</label>
+              <select 
+                value={bypassModalData.difficulty || "medium"}
+                onChange={e => setBypassModalData({ ...bypassModalData, difficulty: e.target.value })}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.9rem" }}
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
             </div>
 
             <div>

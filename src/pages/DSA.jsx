@@ -61,6 +61,10 @@ export default function DSA() {
           tasks: t.tasks.map(task => {
             if (task.id === taskId) {
               const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(task.status);
+              if (isCompleted) {
+                // Remove from dsaProblems
+                setDsaProblems(prev => prev.filter(p => p.roadmapTaskId !== `plan-${trackId}::${taskId}`));
+              }
               return { 
                 ...task, 
                 status: isCompleted ? "Not Started" : "Completed",
@@ -86,7 +90,8 @@ export default function DSA() {
         confidence: 0,
         notes: "",
         keyTakeaway: "",
-        timeSpentMins: ""
+        timeSpentMins: "",
+        difficulty: task.difficulty || "medium"
       });
     } else {
       toggleRoadmapTask(roadmapId, task.id);
@@ -106,7 +111,7 @@ export default function DSA() {
   const handleBypassConfirm = (e) => {
     e.preventDefault();
     if (bypassModalData) {
-      const { trackId, milestoneId, title, confidence, notes, keyTakeaway, timeSpentMins } = bypassModalData;
+      const { trackId, milestoneId, title, confidence, notes, keyTakeaway, timeSpentMins, difficulty } = bypassModalData;
       const mins = parseInt(timeSpentMins, 10) || 0;
       const todayStr = new Date().toLocaleDateString("en-CA");
 
@@ -139,7 +144,8 @@ export default function DSA() {
                 keyTakeaway: keyTakeaway || m.keyTakeaway,
                 timeSpentMins: newTimeSpent,
                 dateCompleted: isNowComplete ? todayStr : m.dateCompleted,
-                needsRevision: isNowComplete ? (confidence > 0 && confidence <= 3) : m.needsRevision
+                needsRevision: isNowComplete ? (confidence > 0 && confidence <= 3) : m.needsRevision,
+                difficulty: difficulty || m.difficulty || "medium"
               };
             }
             return m;
@@ -177,6 +183,21 @@ export default function DSA() {
       };
       setActivityLogs(prev => [...prev, act]);
 
+      // If it's a DSA track/domain, auto-log to dsaProblems list
+      if (permKey === "dsa") {
+        const problemEntry = {
+          id: `prob-${Date.now()}`,
+          title: title,
+          link: trackObj?.tasks?.find(m => m.id === milestoneId)?.link || "https://leetcode.com/problems",
+          difficulty: difficulty || "medium",
+          category: trackObj?.title || "Syllabus",
+          notes: notes || "",
+          solvedAt: todayStr,
+          roadmapTaskId: `plan-${trackId}::${milestoneId}`
+        };
+        setDsaProblems(prev => [problemEntry, ...prev]);
+      }
+
       setBypassModalData(null);
     }
   };
@@ -210,6 +231,14 @@ export default function DSA() {
 
   const handleDeleteProblem = (id) => {
     if (window.confirm("Are you sure you want to delete this problem log?")) {
+      const prob = dsaProblems.find(p => p.id === id);
+      if (prob && prob.roadmapTaskId) {
+        const sourceId = prob.roadmapTaskId.replace("plan-", "");
+        const [trackId, taskId] = sourceId.split("::");
+        if (trackId && taskId) {
+          toggleRoadmapTask(trackId, taskId);
+        }
+      }
       setDsaProblems(prev => prev.filter(p => p.id !== id));
     }
   };
@@ -220,8 +249,11 @@ export default function DSA() {
     dsaTracks.forEach(t => {
       (t.tasks || []).forEach(task => {
         if (["Completed", "Solved", "Mastered", "Applied"].includes(task.status) && task.dateCompleted) {
-          // ensure we only take the YYYY-MM-DD part
-          dates.push(task.dateCompleted.split("T")[0]);
+          // Check if this task already has a logged problem in dsaProblems to avoid double-counting
+          const alreadyLogged = dsaProblems.some(p => p.roadmapTaskId === `plan-${t.id}::${task.id}`);
+          if (!alreadyLogged) {
+            dates.push(task.dateCompleted.split("T")[0]);
+          }
         }
       });
     });
@@ -713,6 +745,19 @@ export default function DSA() {
                 />
                 Time is already logged via focus timer (prevent double counting)
               </label>
+            </div>
+
+            <div>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Difficulty</label>
+              <select 
+                value={bypassModalData.difficulty || "medium"}
+                onChange={e => setBypassModalData({ ...bypassModalData, difficulty: e.target.value })}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.9rem" }}
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
             </div>
 
             <div>

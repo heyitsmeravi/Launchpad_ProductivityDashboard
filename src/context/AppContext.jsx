@@ -933,6 +933,28 @@ export const AppProvider = ({ children }) => {
                 [todayStr]: plans.map(p => (p.id === taskId || `plan-${p.id}` === taskId) ? { ...p, completed: true } : p)
               };
             });
+
+            // If it's a DSA track/domain, auto-log to dsaProblems list
+            if (permKey === "dsa") {
+              const trackObj = tracks.find(t => t.id === trackId);
+              const taskObj = trackObj?.tasks?.find(m => m.id === itemId);
+              if (taskObj) {
+                const problemEntry = {
+                  id: `prob-${Date.now()}`,
+                  title: taskObj.title,
+                  link: taskObj.link || "https://leetcode.com/problems",
+                  difficulty: taskObj.difficulty || "medium",
+                  category: trackObj.title || "Syllabus",
+                  notes: planNotes || "",
+                  solvedAt: todayStr,
+                  roadmapTaskId: `plan-${trackId}::${itemId}`
+                };
+                setDsaProblems(prev => {
+                  if (prev.some(p => p.roadmapTaskId === `plan-${trackId}::${itemId}`)) return prev;
+                  return [problemEntry, ...prev];
+                });
+              }
+            }
           }
         } else {
           // Standalone plan item
