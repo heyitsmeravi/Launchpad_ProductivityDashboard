@@ -322,7 +322,7 @@ Here is their current context:\n${userContext}`;
         <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.2fr", gap: "1.5rem", height: "calc(100vh - 180px)", minHeight: "500px" }}>
           
           {/* Left Column: Report Logs */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", overflowY: "auto", paddingRight: "0.5rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", overflowY: "auto", paddingRight: "0.5rem", minHeight: 0 }}>
             {error && (
               <div className="glass-card" style={{ borderLeft: "4px solid #ff4444", padding: "1rem", display: "flex", alignItems: "center", gap: "0.5rem", color: "#ff4444", fontSize: "0.85rem" }}>
                 <ShieldAlert size={16} />
@@ -363,7 +363,7 @@ Here is their current context:\n${userContext}`;
           </div>
 
           {/* Right Column: AI Chat Coach */}
-          <div className="glass-card" style={{ display: "flex", flexDirection: "column", padding: "1rem", height: "100%", maxHeight: "550px" }}>
+          <div className="glass-card" style={{ display: "flex", flexDirection: "column", padding: "1rem", height: "100%", minHeight: 0 }}>
             <div className="glass-card-header" style={{ marginBottom: "0.75rem" }}>
               <h3 style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                 <Brain size={16} color="var(--accent)" />
