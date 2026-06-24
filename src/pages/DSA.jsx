@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Plus, Search, ExternalLink, Trash2, Award, Filter, Flame, Calendar, CheckSquare, Layers, Star } from "lucide-react";
+import { Plus, Search, ExternalLink, Trash2, Award, Filter, Flame, Calendar, CheckSquare, Layers, Star ,PlayCircle} from "lucide-react";
 
 export default function DSA() {
   const { 
@@ -23,7 +23,7 @@ export default function DSA() {
     mapCategoryToPermanentKey,
     getTrackDomain,
     setTimerMode,
-    setTimerIsRunning
+    setTimerIsRunning,
   } = useApp();
   const pillarName = settings?.pillar1Name || "Problem";
 
@@ -190,7 +190,7 @@ export default function DSA() {
     const problem = {
       id: "prob-" + Date.now(),
       title: newProblem.title.trim(),
-      link: newProblem.link.trim() || "https://leetcode.com",
+      link: newProblem.link.trim() || "https://leetcode.com/problems",
       difficulty: newProblem.difficulty,
       category: newProblem.category,
       notes: newProblem.notes.trim(),
