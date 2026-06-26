@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard";
 import Tracks from "./pages/Tracks";
@@ -15,21 +15,26 @@ import Sidebar from "./components/layout/Sidebar";
 import Topbar from "./components/layout/Topbar";
 import GlobalTimerCompletion from "./components/GlobalTimerCompletion";
 import AIAdvisor from "./pages/AIAdvisor";
+import FocusWorkspace from "./pages/FocusWorkspace";
+import FocusRecoveryManager from "./components/FocusRecoveryManager";
 
 import { useState } from "react";
 
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
+  const isFocusWorkspace = location.pathname === "/focus";
 
   return (
     <div className="app-layout">
-      <Sidebar isOpen={mobileMenuOpen} setIsOpen={setMobileMenuOpen} />
+      {!isFocusWorkspace && <Sidebar isOpen={mobileMenuOpen} setIsOpen={setMobileMenuOpen} />}
 
-      <div className="main-content">
-        <Topbar toggleMenu={() => setMobileMenuOpen(!mobileMenuOpen)} />
+      <div className="main-content" style={{ paddingLeft: isFocusWorkspace ? 0 : undefined }}>
+        {!isFocusWorkspace && <Topbar toggleMenu={() => setMobileMenuOpen(!mobileMenuOpen)} />}
 
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/focus" element={<FocusWorkspace />} />
           <Route path="/tracks" element={<Tracks />} />
           <Route path="/planner" element={<Planner />} />
           <Route path="/goals" element={<Goals />} />
@@ -45,6 +50,7 @@ function App() {
       </div>
 
       <GlobalTimerCompletion />
+      <FocusRecoveryManager />
     </div>
   );
 }

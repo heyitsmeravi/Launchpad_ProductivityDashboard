@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Plus, Search, ExternalLink, Trash2, Award, Filter, Flame, Calendar, CheckSquare, Layers, Star ,PlayCircle} from "lucide-react";
+import { Plus, Search, ExternalLink, Trash2, Flame, Calendar, Star ,PlayCircle} from "lucide-react";
 
 export default function DSA() {
   const { 
@@ -9,21 +9,18 @@ export default function DSA() {
     tracks, 
     setTracks, 
     settings, 
-    timerSeconds, 
     currentFocusTask, 
     setCurrentFocusTask,
     activeFocusSession, 
     setActiveFocusSession,
     setActivityLogs,
-    todayGoalsChecked,
     setTodayGoalsChecked,
-    todayPermanentProgress,
     setTodayPermanentProgress,
     getPermanentTarget,
-    mapCategoryToPermanentKey,
     getTrackDomain,
     setTimerMode,
     setTimerIsRunning,
+    finishFocusSessionEarly,
   } = useApp();
   const pillarName = settings?.pillar1Name || "Problem";
 
@@ -83,6 +80,11 @@ export default function DSA() {
   const handleCheckboxClick = (roadmapId, task) => {
     const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(task.status);
     if (!isCompleted) {
+      const focusTaskId = `plan-${roadmapId}::${task.id}`;
+      if (currentFocusTask === focusTaskId && activeFocusSession) {
+        finishFocusSessionEarly();
+        return;
+      }
       setBypassModalData({ 
         trackId: roadmapId, 
         milestoneId: task.id, 
@@ -173,6 +175,7 @@ export default function DSA() {
         id: `act-${Date.now()}`,
         taskId: `plan-${trackId}::${milestoneId}`,
         date: todayStr,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         durationMinutes: bypassModalData.alreadyLogged ? 0 : mins,
         desc: bypassModalData.alreadyLogged ? `Completed "${title}" (Time already tracked)` : `Logged ${mins}m on ${title}`,
         mode: "task",
@@ -193,6 +196,7 @@ export default function DSA() {
           category: trackObj?.title || "Syllabus",
           notes: notes || "",
           solvedAt: todayStr,
+          solvedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           roadmapTaskId: `plan-${trackId}::${milestoneId}`
         };
         setDsaProblems(prev => [problemEntry, ...prev]);
@@ -215,7 +219,8 @@ export default function DSA() {
       difficulty: newProblem.difficulty,
       category: newProblem.category,
       notes: newProblem.notes.trim(),
-      solvedAt: new Date().toLocaleDateString("en-CA")
+      solvedAt: new Date().toLocaleDateString("en-CA"),
+      solvedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
     setDsaProblems(prev => [problem, ...prev]);
@@ -560,7 +565,9 @@ export default function DSA() {
                           </a>
                         )}
                       </div>
-                      <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>{prob.category} &bull; {prob.notes}</span>
+                      <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>
+                        {prob.solvedAt} {prob.solvedTime ? `@ ${prob.solvedTime}` : ""} &bull; {prob.category} {prob.notes ? `&bull; ${prob.notes}` : ""}
+                      </span>
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>

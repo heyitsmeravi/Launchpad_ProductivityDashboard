@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
-import { Sparkles, Brain, Clock, ShieldAlert, Send, SendHorizontal, Trash2, RotateCw } from "lucide-react";
+import { Sparkles, Brain, Clock, ShieldAlert, SendHorizontal, Trash2, RotateCw } from "lucide-react";
 
 export default function AIAdvisor() {
   const { activityLogs, distractions, dailyReflections, settings, tracks } = useApp();
@@ -10,7 +10,7 @@ export default function AIAdvisor() {
     try {
       const saved = localStorage.getItem("lp_ai_reports");
       return saved ? JSON.parse(saved) : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   });
@@ -104,7 +104,6 @@ export default function AIAdvisor() {
 
   // Compile user context to prompt Gemini
   const compileUserContext = () => {
-    const todayStr = new Date().toLocaleDateString("en-CA");
     
     // 1. Compile recent activity logs
     const recentLogs = activityLogs.slice(0, 15).map(log => ({
@@ -193,7 +192,9 @@ Keep the tone encouraging, structured, direct, and elite. Output in standard Mar
           if (errData.error?.message) {
             errMsg = errData.error.message;
           }
-        } catch (e) {}
+        } catch {
+          // Fall back to default error message if JSON parsing fails
+        }
         throw new Error(`Gemini API Error: ${errMsg}`);
       }
 
@@ -270,7 +271,9 @@ Here is their current context:\n${userContext}`;
           if (errData.error?.message) {
             errMsg = errData.error.message;
           }
-        } catch (e) {}
+        } catch {
+          // Fall back to default error message if JSON parsing fails
+        }
         throw new Error(`Gemini API Error: ${errMsg}`);
       }
 

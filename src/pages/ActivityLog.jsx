@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Plus, Trash2, Calendar, Clock, Star, Zap, Award } from "lucide-react";
+import { Plus, Trash2, Calendar, Clock, Star } from "lucide-react";
 
 export default function ActivityLog() {
   const { activityLogs, setActivityLogs, tracks, setTracks } = useApp();
@@ -28,6 +28,7 @@ export default function ActivityLog() {
     const activityEntry = {
       id: actId,
       date: newActivity.date,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       desc: newActivity.desc.trim(),
       trackId: newActivity.trackId,
       progressIncrement: increment,
@@ -211,7 +212,9 @@ export default function ActivityLog() {
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.03)", paddingBottom: "0.25rem", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <Calendar size={12} style={{ color: "var(--accent)" }} />
-                    <span style={{ fontWeight: 800, color: "#fff" }}>{act.date}</span>
+                    <span style={{ fontWeight: 800, color: "#fff" }}>
+                      {act.date} {act.time ? `@ ${act.time}` : ""}
+                    </span>
                   </div>
                   <div style={{ display: "flex", gap: "1rem", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>

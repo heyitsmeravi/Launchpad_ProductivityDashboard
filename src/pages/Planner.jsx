@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Plus, Trash2, Edit2, Check, RotateCcw, AlertTriangle, ArrowUp, ArrowDown, Save, FolderOpen, Play, ArrowLeft, ArrowRight } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, ArrowUp, ArrowDown, Save, FolderOpen, Play, ArrowLeft, ArrowRight } from "lucide-react";
 
 export default function Planner() {
-  const { dailyPlans, setDailyPlans, setTimerIsRunning, setTimerMode, setTimerSeconds, setTimerActivePlanId, tracks, projects, goals, dsaProblems } = useApp();
+  const { dailyPlans, setDailyPlans, setTimerIsRunning, setTimerMode, setTimerSeconds, setTimerActivePlanId, tracks, projects, goals } = useApp();
   
   // Date picker state
   const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA"));

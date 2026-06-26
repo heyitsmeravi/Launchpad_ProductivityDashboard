@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Plus, Trash2, Award, Calendar, CheckSquare, Target, Edit2 } from "lucide-react";
+import { Plus, Trash2, Calendar, CheckSquare, Target } from "lucide-react";
 
 export default function Goals() {
   const { goals, setGoals, tracks } = useApp();

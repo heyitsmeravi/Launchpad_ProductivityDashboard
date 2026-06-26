@@ -11,7 +11,7 @@ import {
   Legend,
   CartesianGrid
 } from "recharts";
-import { TrendingUp, Flame, Calendar, Award, CheckSquare, Target, Zap, Star, Activity } from "lucide-react";
+import { TrendingUp, Flame, Calendar, Award, Target, Zap, Star, Activity } from "lucide-react";
 
 export default function Analytics() {
   const { activityLogs, dailyPlans, distractions, tracks, goals, settings } = useApp();
@@ -29,9 +29,7 @@ export default function Analytics() {
   const totalGoals = goals.length;
   const goalCompletionPct = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
 
-  // C. DSA Solves sum
-  const dsaTracks = tracks.filter(t => t.category === "dsa");
-  const totalDsaSolves = dsaTracks.reduce((sum, t) => sum + t.progress, 0);
+
 
   // D. Average project completion percent
   const projectTracks = tracks.filter(t => t.category === "project" || t.category === "development");

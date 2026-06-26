@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 import { Rocket, Target, Play, Pause, CheckCircle, Star, Trophy, Clock, FileText } from "lucide-react";
 
+const generateActivityId = () => `act-${Date.now()}`;
+
 export default function ExecutionCenter() {
   const {
     goals,
@@ -18,7 +20,6 @@ export default function ExecutionCenter() {
     setTodayMission,
     currentFocusTask,
     setCurrentFocusTask,
-    dailyScoreHistory,
     setDailyScoreHistory,
     dailyReflections,
     setDailyReflections,
@@ -27,7 +28,6 @@ export default function ExecutionCenter() {
     setTimerIsRunning,
     timerMode,
     setTimerMode,
-    setTimerSeconds,
     timerConfig,
     todayPermanentProgress,
     setTodayPermanentProgress,
@@ -38,9 +38,7 @@ export default function ExecutionCenter() {
     activeFocusSession,
     setActiveFocusSession,
     finishFocusSessionEarly,
-    mapCategoryToPermanentKey,
-    getTrackDomain,
-    mapTitleToPermanentKey
+    getTrackDomain
   } = useApp();
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionData, setCompletionData] = useState({
@@ -97,16 +95,18 @@ export default function ExecutionCenter() {
   const getPermanentTarget = (key) => {
     const isOddDay = new Date().getDate() % 2 !== 0;
     switch(key) {
-      case "dsa": 
+      case "dsa": {
         const baseDsa = settings?.permanentGoals?.dsa || 0;
         return settings?.oddEvenMode 
           ? Math.round(baseDsa * (isOddDay ? 1.2 : 0.6) * 60)
           : Math.round(baseDsa * 60);
-      case "development": 
+      }
+      case "development": {
         const baseDev = settings?.permanentGoals?.development || 0;
         return settings?.oddEvenMode 
           ? Math.round(baseDev * (isOddDay ? 0.5 : 1.5) * 60)
           : Math.round(baseDev * 60);
+      }
       case "learning": return Math.round((settings?.permanentGoals?.learning || 0) * 60);
       case "reading": return Math.round((settings?.permanentGoals?.reading || 0) * 2);
       case "exercise": return Math.round((settings?.permanentGoals?.exercise || 0));
@@ -116,6 +116,17 @@ export default function ExecutionCenter() {
 
   const markGoalComplete = (task, timeSpentMinsOverride = null) => {
     const timeSpent = timeSpentMinsOverride !== null ? timeSpentMinsOverride : 0;
+
+    const isCurrentFocus = activeFocusSession && (
+      activeFocusSession.taskId === task.id ||
+      activeFocusSession.taskId === `plan-${task.id}` ||
+      (task.sourceId && activeFocusSession.taskId === `plan-${task.sourceId}`)
+    );
+
+    if (isCurrentFocus) {
+      finishFocusSessionEarly();
+      return;
+    }
 
     if (task.type === "plan" && task.sourceId && task.sourceId.includes("::")) {
       setCompletionData({
@@ -144,7 +155,7 @@ export default function ExecutionCenter() {
       // Only auto-log permanent goal time if it wasn't already tracked by the background timer!
       if (timeSpent > 0 && timeSpentMinsOverride === null) {
         const act = {
-          id: `act-${Date.now()}`,
+          id: generateActivityId(),
           taskId: task.id,
           date: todayStr,
           durationMinutes: timeSpent,
@@ -243,7 +254,7 @@ export default function ExecutionCenter() {
 
     if (completionData.logAsStudy) {
       const act = {
-        id: `act-${Date.now()}`,
+        id: generateActivityId(),
         taskId: task.id,
         date: todayStr,
         durationMinutes: completionData.alreadyLogged ? 0 : completionData.timeSpentMins,

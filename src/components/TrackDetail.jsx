@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { ArrowLeft, Clock, Star, Edit2, CheckCircle, RefreshCw, Bookmark, AlertTriangle, PlayCircle } from "lucide-react";
+import { ArrowLeft, Clock, Star, AlertTriangle, PlayCircle } from "lucide-react";
 
 export default function TrackDetail({ trackId, onBack }) {
   const { 
@@ -74,13 +74,16 @@ export default function TrackDetail({ trackId, onBack }) {
     );
   };
 
-  const filteredTasks = track.tasks.filter(task => {
-    if (filterStatus === "all") return true;
-    if (filterStatus === "needsRevision") return task.needsRevision;
-    if (filterStatus === "completed") return ["Completed", "Solved", "Mastered", "Applied", "Revised"].includes(task.status);
-    return true;
-  });
+  const getFilteredLessons = (lessons) => {
+    return lessons.filter(lesson => {
+      if (filterStatus === "all") return true;
+      if (filterStatus === "needsRevision") return lesson.needsRevision;
+      if (filterStatus === "completed") return lesson.completed;
+      return true;
+    });
+  };
 
+  const totalLessonsCount = track.modules ? track.modules.reduce((sum, m) => sum + (m.lessons ? m.lessons.length : 0), 0) : 0;
   const totalTime = track.tasks.reduce((sum, t) => sum + (t.timeSpentMins || 0), 0);
   const avgConfidence = track.tasks.length ? 
     (track.tasks.reduce((sum, t) => sum + (t.confidence || 0), 0) / track.tasks.length).toFixed(1) : 0;
@@ -130,7 +133,7 @@ export default function TrackDetail({ trackId, onBack }) {
       {/* Task List Section */}
       <div className="glass-card" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div className="glass-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3>Syllabus Items ({track.tasks.length})</h3>
+          <h3>Syllabus Items ({totalLessonsCount})</h3>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <select 
               value={filterStatus} 
@@ -144,101 +147,138 @@ export default function TrackDetail({ trackId, onBack }) {
           </div>
         </div>
 
-        <div style={{ overflowY: "auto", padding: "1rem" }}>
-          {filteredTasks.length === 0 ? (
+        <div style={{ overflowY: "auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          {!track.modules || track.modules.length === 0 || totalLessonsCount === 0 ? (
             <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
-              No items found matching the filter.
+              No syllabus items found in this track.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {filteredTasks.map(task => (
-                <div key={task.id} style={{ 
-                  background: "rgba(255,255,255,0.02)", 
-                  border: "1px solid var(--card-border)", 
-                  borderRadius: "8px", 
-                  padding: "1rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.75rem"
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.25rem" }}>
-                        {task.needsRevision && <AlertTriangle size={14} color="#ef4444" />}
-                        <h4 style={{ margin: 0, fontSize: "0.95rem", color: ["Completed", "Solved", "Mastered", "Applied"].includes(task.status) ? "var(--text-muted)" : "#fff", textDecoration: ["Completed", "Solved", "Mastered", "Applied"].includes(task.status) ? "line-through" : "none" }}>
-                          {task.title}
-                        </h4>
-                        {!["Completed", "Solved", "Mastered", "Applied"].includes(task.status) && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const focusTaskId = `plan-${track.id}::${task.id}`;
-                              setCurrentFocusTask(focusTaskId);
-                              setTimerMode("focus");
-                              setTimerIsRunning(true);
-                              if (activeFocusSession) {
-                                setActiveFocusSession(prev => prev ? { ...prev, taskId: focusTaskId } : null);
-                              }
-                            }}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: currentFocusTask === `plan-${track.id}::${task.id}` ? "var(--accent)" : "rgba(255,255,255,0.4)",
-                              cursor: "pointer",
-                              padding: "2px",
-                              display: "flex",
-                              alignItems: "center"
-                            }}
-                            title="Start Focus Session"
-                          >
-                            <PlayCircle size={14} fill={currentFocusTask === `plan-${track.id}::${task.id}` ? "var(--accent)" : "none"} />
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", gap: "1rem", fontSize: "0.75rem", color: "var(--text-secondary)", alignItems: "center" }}>
-                        <span style={{ color: getStatusColor(task.status), fontWeight: "bold" }}>{task.status}</span>
-                        {task.timeSpentMins > 0 && (
-                          <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Clock size={12} /> {task.timeSpentMins}m</span>
-                        )}
-                        {task.dateCompleted && (
-                          <span>Done: {task.dateCompleted}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      {renderStars(task.confidence || 0, task.id)}
-                    </div>
+            track.modules.map(module => {
+              const filteredLessons = getFilteredLessons(module.lessons || []);
+              
+              return (
+                <div key={module.id} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {/* Module Header */}
+                  <div style={{ 
+                    padding: "0.6rem 1rem", 
+                    background: "rgba(255,255,255,0.03)", 
+                    border: "1px solid var(--card-border)",
+                    borderLeft: "4px solid var(--accent)", 
+                    borderRadius: "6px", 
+                    fontWeight: "bold", 
+                    color: "#fff",
+                    fontSize: "0.85rem",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }}>
+                    <span>{module.title}</span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "normal" }}>
+                      {filteredLessons.length} {filteredLessons.length === 1 ? "item" : "items"}
+                    </span>
                   </div>
 
-                  {/* Expandable Rich Data */}
-                  <div style={{ display: "grid", gridTemplateColumns: track.category === "playlist" || track.category === "book" ? "1fr 1fr" : "1fr", gap: "1rem", marginTop: "0.5rem" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <label style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Notes</label>
-                      <input 
-                        type="text" 
-                        value={task.notes || ""}
-                        onChange={(e) => handleUpdateItem(task.id, { notes: e.target.value })}
-                        placeholder="Add notes..."
-                        style={{ fontSize: "0.8rem", padding: "0.5rem", background: "rgba(0,0,0,0.2)", border: "1px dashed var(--card-border)", color: "#fff", borderRadius: "4px" }}
-                      />
+                  {/* Lessons List */}
+                  {filteredLessons.length === 0 ? (
+                    <div style={{ padding: "1rem", color: "var(--text-muted)", fontSize: "0.8rem", textAlign: "center", border: "1px dashed var(--card-border)", borderRadius: "8px", marginLeft: "1rem" }}>
+                      No items match the filter in this module.
                     </div>
-                    
-                    {(track.category === "playlist" || track.category === "book") && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                        <label style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Key Takeaway</label>
-                        <input 
-                          type="text" 
-                          value={task.keyTakeaway || ""}
-                          onChange={(e) => handleUpdateItem(task.id, { keyTakeaway: e.target.value })}
-                          placeholder="What did you learn?"
-                          style={{ fontSize: "0.8rem", padding: "0.5rem", background: "rgba(0,0,0,0.2)", border: "1px dashed var(--card-border)", color: "#fff", borderRadius: "4px" }}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", paddingLeft: "1rem" }}>
+                      {filteredLessons.map(lesson => (
+                        <div key={lesson.id} style={{ 
+                          background: "rgba(255,255,255,0.02)", 
+                          border: "1px solid var(--card-border)", 
+                          borderRadius: "8px", 
+                          padding: "1rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.75rem"
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.25rem" }}>
+                                {lesson.needsRevision && <AlertTriangle size={14} color="#ef4444" />}
+                                <h4 style={{ margin: 0, fontSize: "0.95rem", color: lesson.completed ? "var(--text-muted)" : "#fff", textDecoration: lesson.completed ? "line-through" : "none" }}>
+                                  {lesson.title}
+                                </h4>
+                                {!lesson.completed && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const focusTaskId = `plan-${track.id}::${lesson.id}`;
+                                      setCurrentFocusTask(focusTaskId);
+                                      setTimerMode("focus");
+                                      setTimerIsRunning(true);
+                                      if (activeFocusSession) {
+                                        setActiveFocusSession(prev => prev ? { ...prev, taskId: focusTaskId } : null);
+                                      }
+                                    }}
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      color: currentFocusTask === `plan-${track.id}::${lesson.id}` ? "var(--accent)" : "rgba(255,255,255,0.4)",
+                                      cursor: "pointer",
+                                      padding: "2px",
+                                      display: "flex",
+                                      alignItems: "center"
+                                    }}
+                                    title="Start Focus Session"
+                                  >
+                                    <PlayCircle size={14} fill={currentFocusTask === `plan-${track.id}::${lesson.id}` ? "var(--accent)" : "none"} />
+                                  </button>
+                                )}
+                              </div>
+                              <div style={{ display: "flex", gap: "1rem", fontSize: "0.75rem", color: "var(--text-secondary)", alignItems: "center" }}>
+                                <span style={{ color: getStatusColor(lesson.completed ? (track.category === "dsa" ? "Solved" : "Completed") : "Not Started"), fontWeight: "bold" }}>
+                                  {lesson.completed ? (track.category === "dsa" ? "Solved" : "Completed") : "Not Started"}
+                                </span>
+                                {lesson.timeSpentMins > 0 && (
+                                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Clock size={12} /> {lesson.timeSpentMins}m</span>
+                                )}
+                                {lesson.dateCompleted && (
+                                  <span>Done: {lesson.dateCompleted}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              {renderStars(lesson.confidence || 0, lesson.id)}
+                            </div>
+                          </div>
+
+                          {/* Expandable Rich Data */}
+                          <div style={{ display: "grid", gridTemplateColumns: track.category === "playlist" || track.category === "book" ? "1fr 1fr" : "1fr", gap: "1rem", marginTop: "0.5rem" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <label style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Notes</label>
+                              <input 
+                                type="text" 
+                                value={lesson.notes || ""}
+                                onChange={(e) => handleUpdateItem(lesson.id, { notes: e.target.value })}
+                                placeholder="Add notes..."
+                                style={{ fontSize: "0.8rem", padding: "0.5rem", background: "rgba(0,0,0,0.2)", border: "1px dashed var(--card-border)", color: "#fff", borderRadius: "4px" }}
+                              />
+                            </div>
+                            
+                            {(track.category === "playlist" || track.category === "book") && (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <label style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Key Takeaway</label>
+                                <input 
+                                  type="text" 
+                                  value={lesson.keyTakeaway || ""}
+                                  onChange={(e) => handleUpdateItem(lesson.id, { keyTakeaway: e.target.value })}
+                                  placeholder="What did you learn?"
+                                  style={{ fontSize: "0.8rem", padding: "0.5rem", background: "rgba(0,0,0,0.2)", border: "1px dashed var(--card-border)", color: "#fff", borderRadius: "4px" }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })
           )}
         </div>
       </div>

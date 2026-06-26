@@ -1,22 +1,16 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
 import * as XLSX from "xlsx";
+import { ImportService } from "../services/ImportService.js";
 import { 
   Plus, 
   Trash2, 
   Book, 
   PlayCircle, 
   GraduationCap, 
-  Award, 
-  ChevronRight, 
-  Check, 
   Archive, 
   Upload, 
   Briefcase, 
-  Wrench, 
-  TrendingUp, 
-  Clock, 
-  Calendar,
   Layers,
   Edit2,
   Code,
@@ -24,28 +18,29 @@ import {
 } from "lucide-react";
 import TrackDetail from "../components/TrackDetail";
 
+const getDaysElapsed = (createdAt) => {
+  const created = new Date(createdAt || Date.now() - 5 * 24 * 60 * 60 * 1000);
+  const diff = Date.now() - created.getTime();
+  return Math.max(1, Math.round(diff / (1000 * 3600 * 24)));
+};
+
 export default function Tracks() {
   const { 
     tracks, 
     setTracks, 
-    activityLogs,
     setActivityLogs,
-    todayGoalsChecked,
     setTodayGoalsChecked,
-    timerSeconds,
     currentFocusTask,
     setCurrentFocusTask,
     activeFocusSession,
     setActiveFocusSession,
-    todayPermanentProgress,
     setTodayPermanentProgress,
     getPermanentTarget,
-    mapCategoryToPermanentKey,
     getTrackDomain,
     setTimerMode,
     setTimerIsRunning,
-    dsaProblems,
-    setDsaProblems
+    setDsaProblems,
+    finishFocusSessionEarly
   } = useApp();
   
   // Detail View State
@@ -57,6 +52,7 @@ export default function Tracks() {
   const [importedTasks, setImportedTasks] = useState([]);
   const [showSourceImport, setShowSourceImport] = useState(false);
   const [playlistSourceText, setPlaylistSourceText] = useState("");
+  const [importedTrackPreview, setImportedTrackPreview] = useState(null);
   
   // Excel Importer states
   const [pendingExcelData, setPendingExcelData] = useState(null);
@@ -124,7 +120,7 @@ export default function Tracks() {
       const reg = /[&?]list=([^&#]+)/;
       const match = url.match(reg);
       return match ? match[1] : null;
-    } catch (e) {
+    } catch {
       return null;
     }
   };
@@ -172,7 +168,7 @@ export default function Tracks() {
           } else {
             html = text;
           }
-        } catch (e) {
+        } catch {
           html = text;
         }
 
@@ -196,120 +192,25 @@ export default function Tracks() {
     }
 
     try {
-      // Robust multiline extraction for ytInitialData using [\s\S]
-      let jsonStr = null;
-      const match = html.match(/(?:window\["ytInitialData"\]|ytInitialData)\s*=\s*({[\s\S]*?});/);
-      if (match) {
-        jsonStr = match[1];
-      } else {
-        const altMatch = html.match(/(?:window\["ytInitialData"\]|ytInitialData)\s*=\s*({[\s\S]*?})<\/script>/);
-        if (altMatch) {
-          jsonStr = altMatch[1];
-        } else {
-          // Attempt parsing by finding first { and matching braces roughly
-          const sliceIndex = html.indexOf("ytInitialData = {");
-          if (sliceIndex !== -1) {
-            const startPos = sliceIndex + "ytInitialData = ".length;
-            // Scan for matched closing brace
-            let braceCount = 0;
-            let endPos = -1;
-            for (let j = startPos; j < html.length; j++) {
-              if (html[j] === "{") braceCount++;
-              if (html[j] === "}") braceCount--;
-              if (braceCount === 0) {
-                endPos = j + 1;
-                break;
-              }
-            }
-            if (endPos !== -1) {
-              jsonStr = html.substring(startPos, endPos);
-            }
-          }
-        }
+      const result = ImportService.importTrack("playlist", { url: playlistUrl, data: html });
+      if (!result.success) {
+        const errorStrings = result.errors.map(err => `[${err.code}] ${err.message}`);
+        throw new Error(errorStrings.join("\n"));
       }
 
-      if (!jsonStr) {
-        throw new Error("Could not extract ytInitialData from YouTube page HTML. The format may have changed or the playlist is private.");
-      }
+      const importedTrack = result.track;
 
-      const ytData = JSON.parse(jsonStr);
-
-      // Recursive scanner for video items to make it immune to YouTube DOM nesting changes
-      const tasks = [];
-      const findVideos = (obj) => {
-        if (!obj || typeof obj !== "object") return;
-        if (obj.playlistVideoRenderer) {
-          const videoRenderer = obj.playlistVideoRenderer;
-          const videoId = videoRenderer.videoId;
-          const title = videoRenderer.title?.runs?.[0]?.text || `Video ${tasks.length + 1}`;
-          const duration = videoRenderer.lengthText?.simpleText || "0:00";
-          
-          // Avoid duplicate video entries
-          if (videoId && !tasks.some(t => t.videoId === videoId)) {
-            tasks.push({
-              id: `yt-video-${videoId}-${Date.now()}-${tasks.length}`,
-              title: `${title} (${duration})`,
-              status: "Not Started",
-              confidence: 0,
-              timeSpentMins: 0,
-              notes: "",
-              keyTakeaway: "",
-              actionItem: "",
-              dateCompleted: null,
-              videoId: videoId
-            });
-          }
-          return;
-        }
-        for (const key in obj) {
-          if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            findVideos(obj[key]);
-          }
-        }
-      };
-
-      findVideos(ytData);
-
-      if (tasks.length === 0) {
-        throw new Error("No videos found in the playlist. Please make sure the playlist is public and contains active videos.");
-      }
-
-      // Recursive scanner for playlist title
-      let playlistTitle = "Imported YouTube Playlist";
-      const findTitle = (obj) => {
-        if (!obj || typeof obj !== "object") return;
-        if (obj.playlistMetadataRenderer && obj.playlistMetadataRenderer.title) {
-          playlistTitle = obj.playlistMetadataRenderer.title;
-          return;
-        }
-        if (obj.playlistHeaderRenderer && obj.playlistHeaderRenderer.title?.simpleText) {
-          playlistTitle = obj.playlistHeaderRenderer.title.simpleText;
-          return;
-        }
-        if (obj.playlistHeaderRenderer && obj.playlistHeaderRenderer.title?.runs?.[0]?.text) {
-          playlistTitle = obj.playlistHeaderRenderer.title.runs[0].text;
-          return;
-        }
-        for (const key in obj) {
-          if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            findTitle(obj[key]);
-          }
-        }
-      };
-
-      findTitle(ytData);
-
-      // Automatically fill in form values
       setNewTrack(prev => ({
         ...prev,
-        title: playlistTitle,
-        target: tasks.length,
+        title: importedTrack.title,
+        target: result.summary.lessonsCount,
         unit: "Videos",
-        description: `YouTube playlist imported from URL (ID: ${playlistId}).`
+        description: importedTrack.description
       }));
 
-      setImportedTasks(tasks);
-      alert(`Successfully imported "${playlistTitle}" with ${tasks.length} videos! Click 'Create Track' to save it.`);
+      setImportedTrackPreview(importedTrack);
+      setImportedTasks(importedTrack.tasks || []);
+      alert(`Successfully imported "${importedTrack.title}" with ${result.summary.lessonsCount} videos! Click 'Create Track' to save it.`);
     } catch (err) {
       console.error("YouTube playlist parsing failed:", err);
       
@@ -345,152 +246,25 @@ export default function Tracks() {
     setPlaylistSourceText(htmlContent);
     if (!htmlContent.trim()) return;
 
-    // A. Check if the input is a JSON string from our helper console script
     try {
-      const json = JSON.parse(htmlContent.trim());
-      if (Array.isArray(json)) {
-        const tasks = json.map((item, idx) => {
-          const rawTitle = item.title || item.text || `Video ${idx + 1}`;
-          const rawDuration = item.duration || item.length || "0:00";
-          const title = String(rawTitle).trim();
-          const duration = String(rawDuration).trim().replace(/\s+/g, " ");
-          
-          return {
-            id: `yt-video-console-${Date.now()}-${idx}-${Math.random().toString().split(".")[1]}`,
-            title: `${item.title} (${item.duration || "0:00"})`,
-            status: "Not Started",
-            confidence: 0,
-            timeSpentMins: 0,
-            notes: "",
-            keyTakeaway: "",
-            actionItem: "",
-            dateCompleted: null
-          };
-        }).filter(t => t.title.trim());
-
-        if (tasks.length > 0) {
-          setNewTrack(prev => ({
-            ...prev,
-            title: newTrack.title || "Scraped Playlist Import",
-            target: tasks.length,
-            unit: "Videos",
-            description: `YouTube playlist imported via JS Console snippet (${tasks.length} items).`
-          }));
-          setImportedTasks(tasks);
-          return;
-        }
-      }
-    } catch (e) {
-      // Not JSON, fall back to parsing HTML source code below
-    }
-
-    // B. Parse raw HTML page source
-    try {
-      let jsonStr = null;
-      const match = htmlContent.match(/(?:window\["ytInitialData"\]|ytInitialData)\s*=\s*({[\s\S]*?});/);
-      if (match) {
-        jsonStr = match[1];
-      } else {
-        const altMatch = htmlContent.match(/(?:window\["ytInitialData"\]|ytInitialData)\s*=\s*({[\s\S]*?})<\/script>/);
-        if (altMatch) {
-          jsonStr = altMatch[1];
-        } else {
-          const sliceIndex = htmlContent.indexOf("ytInitialData = {");
-          if (sliceIndex !== -1) {
-            const startPos = sliceIndex + "ytInitialData = ".length;
-            let braceCount = 0;
-            let endPos = -1;
-            for (let j = startPos; j < htmlContent.length; j++) {
-              if (htmlContent[j] === "{") braceCount++;
-              if (htmlContent[j] === "}") braceCount--;
-              if (braceCount === 0) {
-                endPos = j + 1;
-                break;
-              }
-            }
-            if (endPos !== -1) {
-              jsonStr = htmlContent.substring(startPos, endPos);
-            }
-          }
-        }
+      const result = ImportService.importTrack("playlist", { url: null, data: htmlContent });
+      if (!result.success) {
+        const errorStrings = result.errors.map(err => `[${err.code}] ${err.message}`);
+        throw new Error(errorStrings.join("\n"));
       }
 
-      if (!jsonStr) {
-        throw new Error("Could not find ytInitialData variables in the pasted content. Ensure you copied the entire page source.");
-      }
-
-      const ytData = JSON.parse(jsonStr);
-
-      const tasks = [];
-      const findVideos = (obj) => {
-        if (!obj || typeof obj !== "object") return;
-        if (obj.playlistVideoRenderer) {
-          const videoRenderer = obj.playlistVideoRenderer;
-          const videoId = videoRenderer.videoId;
-          const title = videoRenderer.title?.runs?.[0]?.text || `Video ${tasks.length + 1}`;
-          const duration = videoRenderer.lengthText?.simpleText || "0:00";
-          if (videoId && !tasks.some(t => t.videoId === videoId)) {
-            tasks.push({
-              id: `yt-video-${videoId}-${Date.now()}-${tasks.length}`,
-              title: `${title} (${duration})`,
-              status: "Not Started",
-              confidence: 0,
-              timeSpentMins: 0,
-              notes: "",
-              keyTakeaway: "",
-              actionItem: "",
-              dateCompleted: null,
-              videoId: videoId
-            });
-          }
-          return;
-        }
-        for (const key in obj) {
-          if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            findVideos(obj[key]);
-          }
-        }
-      };
-
-      findVideos(ytData);
-
-      if (tasks.length === 0) {
-        throw new Error("No videos found. Ensure this is a valid YouTube playlist page source.");
-      }
-
-      let playlistTitle = "Imported Playlist (Source)";
-      const findTitle = (obj) => {
-        if (!obj || typeof obj !== "object") return;
-        if (obj.playlistMetadataRenderer && obj.playlistMetadataRenderer.title) {
-          playlistTitle = obj.playlistMetadataRenderer.title;
-          return;
-        }
-        if (obj.playlistHeaderRenderer && obj.playlistHeaderRenderer.title?.simpleText) {
-          playlistTitle = obj.playlistHeaderRenderer.title.simpleText;
-          return;
-        }
-        if (obj.playlistHeaderRenderer && obj.playlistHeaderRenderer.title?.runs?.[0]?.text) {
-          playlistTitle = obj.playlistHeaderRenderer.title.runs[0].text;
-          return;
-        }
-        for (const key in obj) {
-          if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            findTitle(obj[key]);
-          }
-        }
-      };
-
-      findTitle(ytData);
+      const importedTrack = result.track;
 
       setNewTrack(prev => ({
         ...prev,
-        title: playlistTitle,
-        target: tasks.length,
+        title: importedTrack.title,
+        target: result.summary.lessonsCount,
         unit: "Videos",
-        description: `YouTube playlist imported from Page Source.`
+        description: importedTrack.description
       }));
 
-      setImportedTasks(tasks);
+      setImportedTrackPreview(importedTrack);
+      setImportedTasks(importedTrack.tasks || []);
     } catch (err) {
       console.error("Source parse error:", err);
       if (htmlContent.length > 500) {
@@ -503,20 +277,33 @@ export default function Tracks() {
     e.preventDefault();
     if (!newTrack.title.trim()) return;
 
-    const track = {
-      id: "track-" + Date.now(),
-      title: newTrack.title.trim(),
-      category: newTrack.category,
-      target: parseInt(newTrack.target, 10) || 10,
-      progress: parseInt(newTrack.progress, 10) || 0,
-      unit: newTrack.unit,
-      priority: newTrack.priority,
-      deadline: newTrack.deadline || new Date(Date.now() + 30*24*60*60*1000).toISOString().split("T")[0],
-      status: "learning",
-      description: newTrack.description.trim(),
-      createdAt: new Date().toISOString(),
-      tasks: newTrack.category === "playlist" && importedTasks.length > 0 ? importedTasks : []
-    };
+    let track;
+    if (newTrack.category === "playlist" && importedTrackPreview) {
+      track = {
+        ...importedTrackPreview,
+        title: newTrack.title.trim(),
+        priority: newTrack.priority,
+        deadline: newTrack.deadline || new Date(Date.now() + 30*24*60*60*1000).toISOString().split("T")[0],
+        description: newTrack.description.trim(),
+        category: newTrack.category,
+        unit: newTrack.unit
+      };
+    } else {
+      track = {
+        id: "track-" + Date.now(),
+        title: newTrack.title.trim(),
+        category: newTrack.category,
+        target: parseInt(newTrack.target, 10) || 10,
+        progress: parseInt(newTrack.progress, 10) || 0,
+        unit: newTrack.unit,
+        priority: newTrack.priority,
+        deadline: newTrack.deadline || new Date(Date.now() + 30*24*60*60*1000).toISOString().split("T")[0],
+        status: "learning",
+        description: newTrack.description.trim(),
+        createdAt: new Date().toISOString(),
+        tasks: newTrack.category === "playlist" && importedTasks.length > 0 ? importedTasks : []
+      };
+    }
 
     setTracks(prev => [...prev, track]);
     setNewTrack({
@@ -534,6 +321,7 @@ export default function Tracks() {
     setPlaylistSourceText("");
     setShowSourceImport(false);
     setShowAddForm(false);
+    setImportedTrackPreview(null);
   };
 
   const deleteTrack = (id) => {
@@ -631,92 +419,31 @@ export default function Tracks() {
           colIndex = headers.length === 1 ? headers[0].index : 0;
         }
       }
+      // Use ImportService to parse, validate, and transform the Excel sheet
+      const result = ImportService.importTrack("excel", {
+        XLSX,
+        ws,
+        fileName: file.name,
+        sheetName: wsname,
+        colIndex
+      });
 
-      // Auto-detect a Day or Group column to seamlessly group the syllabus
-      let autoGroupColIndex = null;
-      const headerRow = data[0] || [];
-      const dayHeaderIdx = headerRow.findIndex(h => h && String(h).toLowerCase().trim() === "day");
-      if (dayHeaderIdx !== -1) {
-        autoGroupColIndex = dayHeaderIdx;
-      }
-
-      let lastGroupName = "General";
-
-      const tasks = data.map((row, idx) => {
-        if (!row) return null;
-        if (idx === 0) return null; // Skip header
-        const cell = row[colIndex];
-        if (cell === undefined || cell === null) return null;
-        const text = String(cell).trim();
-        if (!text) return null;
-
-        let url = null;
-        try {
-          const cellAddress = XLSX.utils.encode_cell({ r: idx, c: colIndex });
-          const cellObj = ws[cellAddress];
-          if (cellObj && cellObj.l && cellObj.l.Target) url = cellObj.l.Target;
-        } catch (e) {}
-
-        if (autoGroupColIndex !== null) {
-          const groupCell = row[autoGroupColIndex];
-          if (groupCell !== undefined && groupCell !== null && String(groupCell).trim() !== "") {
-            lastGroupName = `Day ${String(groupCell).trim()}`;
-          }
-        }
-
-        const extractTimeMins = (str) => {
-          const regex = /(\d+(?:\.\d+)?)\s*(hr|h|min|m|mins|hours|hour)\b/gi;
-          let totalMins = 0;
-          let match;
-          while ((match = regex.exec(str)) !== null) {
-            const val = parseFloat(match[1]);
-            const unit = match[2].toLowerCase();
-            if (unit.startsWith('h')) totalMins += val * 60;
-            else if (unit.startsWith('m')) totalMins += val;
-          }
-          return totalMins > 0 ? Math.round(totalMins) : 0;
-        };
-
-        return {
-          id: `task-imported-${Date.now()}-${idx}-${Math.random().toString().split(".")[1]}`,
-          title: text,
-          group: lastGroupName,
-          link: url,
-          status: "Not Started",
-          confidence: 0,
-          timeSpentMins: 0,
-          targetTimeMins: extractTimeMins(text),
-          notes: "",
-          dateCompleted: null,
-          needsRevision: false
-        };
-      }).filter(Boolean);
-
-      if (tasks.length === 0) {
-        alert("Could not extract any tasks from the selected column.");
+      if (!result.success) {
+        const errorStrings = result.errors.map(err => `[${err.code}] ${err.rowNumber ? `Row ${err.rowNumber}: ` : ""}${err.message}`);
+        alert(`Failed to import track:\n${errorStrings.join("\n")}`);
         return;
       }
 
-      const title = file.name.replace(/\.[^/.]+$/, "") + (wb.SheetNames.length > 1 ? ` (${wsname})` : "");
-      const category = file.name.toLowerCase().includes("dsa") ? "dsa" : "skill";
+      const importedTrack = result.track;
 
-      const importedTrack = {
-        id: "track-excel-" + Date.now(),
-        title,
-        category,
-        target: tasks.length,
-        progress: 0,
-        unit: category === "dsa" ? "Problems" : "Tasks",
-        priority: "medium",
-        deadline: new Date(Date.now() + 45*24*60*60*1000).toISOString().split("T")[0],
-        status: "learning",
-        description: `Spreadsheet Roadmap uploaded from ${file.name} (Sheet: ${wsname}, Col: ${data[0][colIndex] || "Unknown"})`,
-        createdAt: new Date().toISOString(),
-        tasks: tasks
-      };
+      if (result.warnings && result.warnings.length > 0) {
+        console.warn("Import warnings: ", result.warnings);
+      }
 
       setTracks(prev => [...prev, importedTrack]);
-      alert(`Successfully imported "${importedTrack.title}" as a track with ${tasks.length} items!`);
+      
+      const totalItems = importedTrack.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
+      alert(`Successfully imported "${importedTrack.title}" as a track with ${totalItems} items!`);
       setPendingExcelData(null);
     } catch (err) {
       console.error("Excel import failed: ", err);
@@ -765,6 +492,11 @@ export default function Tracks() {
   const handleCheckboxClick = (t, task) => {
     const isCompleted = ["Completed", "Solved", "Mastered", "Applied"].includes(task.status);
     if (!isCompleted) {
+      const focusTaskId = `plan-${t.id}::${task.id}`;
+      if (currentFocusTask === focusTaskId && activeFocusSession) {
+        finishFocusSessionEarly();
+        return;
+      }
       setBypassModalData({ 
         trackId: t.id, 
         milestoneId: task.id, 
@@ -845,6 +577,7 @@ export default function Tracks() {
         id: `act-${Date.now()}`,
         taskId: `plan-${trackId}::${milestoneId}`,
         date: todayStr,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         durationMinutes: bypassModalData.alreadyLogged ? 0 : mins,
         desc: bypassModalData.alreadyLogged ? `Completed "${title}" (Time already tracked)` : `Logged ${mins}m on ${title}`,
         mode: "task",
@@ -865,6 +598,7 @@ export default function Tracks() {
           category: trackObj?.title || "Syllabus",
           notes: notes || "",
           solvedAt: todayStr,
+          solvedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           roadmapTaskId: `plan-${trackId}::${milestoneId}`
         };
         setDsaProblems(prev => [problemEntry, ...prev]);
@@ -874,16 +608,7 @@ export default function Tracks() {
     }
   };
 
-  const getCategoryIcon = (category) => {
-    switch (category) {
-      case "dsa": return <Code size={16} style={{ color: "var(--accent)" }} />;
-      case "course": return <GraduationCap size={16} style={{ color: "#7fba00" }} />;
-      case "playlist": return <PlayCircle size={16} style={{ color: "#a855f7" }} />;
-      case "book": return <Book size={16} style={{ color: "#ffb900" }} />;
-      case "project": return <Briefcase size={16} style={{ color: "#ec4899" }} />;
-      default: return <Wrench size={16} style={{ color: "#94a3b8" }} />;
-    }
-  };
+
 
   // Filtering
   const filteredTracks = tracks.filter(t => {
@@ -1341,10 +1066,7 @@ export default function Tracks() {
             const pct = Math.min(100, Math.round((t.progress / t.target) * 100)) || 0;
             
             // Completion Prediction calculations
-            const daysElapsed = Math.max(
-              1, 
-              Math.round((new Date() - new Date(t.createdAt || Date.now() - 5*24*60*60*1000)) / (1000 * 3600 * 24))
-            );
+            const daysElapsed = getDaysElapsed(t.createdAt);
             const rate = parseFloat((t.progress / daysElapsed).toFixed(2));
             const remainingUnits = t.target - t.progress;
             const predictedDays = rate > 0 ? Math.ceil(remainingUnits / rate) : null;
@@ -1380,6 +1102,9 @@ export default function Tracks() {
                   </button>
                   <button onClick={() => startEditing(t)} className="btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}>
                     <Edit2 size={14} /> Edit
+                  </button>
+                  <button onClick={() => toggleArchiveTrack(t.id)} className="btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <Archive size={14} /> {t.status === "archived" ? "Restore" : "Archive"}
                   </button>
                   <button onClick={() => deleteTrack(t.id)} className="btn-danger" style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" }}>
                     <Trash2 size={14} />

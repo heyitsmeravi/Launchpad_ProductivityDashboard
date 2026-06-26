@@ -1,30 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useApp } from "../context/AppContext";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { LearningIntelligenceEngine } from "../services/LearningIntelligenceEngine.js";
 import {
-  Flame,
-  Award,
   AlertTriangle,
   Play,
   Pause,
   RotateCcw,
   Clock,
-  Compass,
   ArrowRight,
-  TrendingUp,
-  Brain,
-  Code,
-  Folder,
-  Zap,
-  Heart,
-  Save,
-  Edit2,
   Bell,
-  Sparkles,
-  BookOpen,
-  CheckCircle,
-  Calendar,
-  Activity
+  Sparkles
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -34,14 +20,12 @@ import {
   Line,
   XAxis,
   YAxis,
-  Tooltip as ChartTooltip,
-  Legend
+  Tooltip as ChartTooltip
 } from "recharts";
 
 export default function Dashboard() {
   const {
     settings,
-    setSettings,
     dailyPlans,
     tracks,
     goals,
@@ -54,8 +38,6 @@ export default function Dashboard() {
     setTimerIsRunning,
     timerMode,
     timerConfig,
-    setPresetMode,
-    presetMode,
     setTimerSeconds,
     todayFocusSeconds,
     todayGoalsChecked,
@@ -64,19 +46,31 @@ export default function Dashboard() {
     todayMission,
     dailyScoreHistory,
     currentFocusTask,
+    setCurrentFocusTask,
     timerOverrideLimit,
     setTimerOverrideLimit,
     setTimerMode,
+    setPresetMode,
     activeFocusSession
   } = useApp();
 
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const navigate = useNavigate();
 
-  // Live clock
-  useEffect(() => {
-    const clock = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(clock);
-  }, []);
+  const learningState = useMemo(() => {
+    return LearningIntelligenceEngine.analyzeLearningState(tracks, activityLogs, settings);
+  }, [tracks, activityLogs, settings]);
+
+  const todaysMission = learningState.mission;
+
+  const handleStartMissionFocus = (mission) => {
+    setCurrentFocusTask(`plan-${mission.trackId}::${mission.lessonId}`);
+    setTimerSeconds(0);
+    setTimerMode("focus");
+    setTimerIsRunning(true);
+    navigate("/focus");
+  };
+
+
 
   // Update theme colors dynamically
   useEffect(() => {
@@ -90,7 +84,6 @@ export default function Dashboard() {
   }, [settings?.themeColor]);
 
   const todayStr = new Date().toLocaleDateString("en-CA");
-  const todayPlansList = dailyPlans?.[todayStr] || [];
 
   const [bypassModalData, setBypassModalData] = useState(null);
 
@@ -209,6 +202,35 @@ export default function Dashboard() {
   // 4. Counts
   const activeTracksCount = (tracks || []).filter(t => t && t.status === "learning").length;
 
+  // XP Leveling Calculations
+  const XP_PER_LEVEL = 120*60; // 120 hours of study per level
+  const totalXP = (activityLogs || []).reduce((sum, log) => sum + (parseInt(log?.durationMinutes, 10) || 0), 0);
+  const currentLevel = Math.floor(totalXP / XP_PER_LEVEL) + 1;
+  const xpInCurrentLevel = totalXP % XP_PER_LEVEL;
+  const progressToNextLevel = (xpInCurrentLevel / XP_PER_LEVEL) * 100;
+
+  const getRank = (level) => {
+    if (level <= 1) return "Tech Intern";
+    if (level <= 2) return "Associate Engineer (L3)";
+    if (level <= 3) return "Software Engineer II (L4)";
+    if (level <= 4) return "Senior SWE (L5)";
+    return "Principal Engineer / Tech Lead (L6)";
+  };
+
+  // All-time peak study day calculation
+  const getMaxStudyTimeAllTime = () => {
+    if (!activityLogs || activityLogs.length === 0) return "0.0";
+    const minutesByDate = {};
+    activityLogs.forEach(log => {
+      if (log && log.date) {
+        minutesByDate[log.date] = (minutesByDate[log.date] || 0) + (parseInt(log.durationMinutes, 10) || 0);
+      }
+    });
+    const maxMinutes = Math.max(...Object.values(minutesByDate), 0);
+    return (maxMinutes / 60).toFixed(1);
+  };
+  const peakStudyHours = getMaxStudyTimeAllTime();
+
   // 5. Deadlines
   const upcomingDeadlines = [
     ...(goals || []).filter(g => g && !g.completed && g.deadline).map(g => ({ title: g.title, deadline: g.deadline, type: "goal" })),
@@ -220,12 +242,14 @@ export default function Dashboard() {
   const pillar1 = settings?.pillar1Name || "DSA Practice";
   const pillar2 = settings?.pillar2Name || "Development";
 
-  const splitRecommendation = settings?.oddEvenMode 
-    ? (isOddDay 
-        ? { label: `ODD DAY (70% ${pillar1} / 30% ${pillar2})`, dsa: (dsaTargetHour * 1.2).toFixed(1), dev: (devTargetHour * 0.5).toFixed(1) }
-        : { label: `EVEN DAY (40% ${pillar1} / 60% ${pillar2})`, dsa: (dsaTargetHour * 0.6).toFixed(1), dev: (devTargetHour * 1.5).toFixed(1) }
-      )
-    : { label: "STANDARD DAY", dsa: dsaTargetHour, dev: devTargetHour };
+  const splitRecommendation = useMemo(() => {
+    return settings?.oddEvenMode 
+      ? (isOddDay 
+          ? { label: `ODD DAY (70% ${pillar1} / 30% ${pillar2})`, dsa: (dsaTargetHour * 1.2).toFixed(1), dev: (devTargetHour * 0.5).toFixed(1) }
+          : { label: `EVEN DAY (40% ${pillar1} / 60% ${pillar2})`, dsa: (dsaTargetHour * 0.6).toFixed(1), dev: (devTargetHour * 1.5).toFixed(1) }
+        )
+      : { label: "STANDARD DAY", dsa: dsaTargetHour, dev: devTargetHour };
+  }, [settings?.oddEvenMode, isOddDay, pillar1, pillar2, dsaTargetHour, devTargetHour]);
 
   const toggleGoalCheck = (key, targetMins, label) => {
     const isCurrentlyChecked = !!todayGoalsChecked?.[key];
@@ -235,6 +259,7 @@ export default function Dashboard() {
       const act = {
         id: `auto-${key}-${todayStr}`,
         date: todayStr,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         desc: `Completed Daily Target: ${label}`,
         trackId: "",
         durationMinutes: targetMins,
@@ -265,13 +290,13 @@ export default function Dashboard() {
     }
   };
 
-  const getLiveProgress = (key) => {
+  const getLiveProgress = useCallback((key) => {
     let base = todayPermanentProgress?.[key] || 0;
     if (currentFocusTask === `perm-${key}`) {
       base += activeFocusSession?.verifiedMinutes || 0;
     }
     return base;
-  };
+  }, [todayPermanentProgress, currentFocusTask, activeFocusSession]);
 
   useEffect(() => {
     const dsaTarget = Math.round(parseFloat(splitRecommendation.dsa) * 60);
@@ -292,7 +317,7 @@ export default function Dashboard() {
       
       return changed ? next : prev;
     });
-  }, [todayPermanentProgress, activeFocusSession, splitRecommendation, setTodayGoalsChecked, currentFocusTask]);
+  }, [todayPermanentProgress, activeFocusSession, splitRecommendation, setTodayGoalsChecked, currentFocusTask, exerciseTargetMin, getLiveProgress, learnTargetHour, readTargetPage]);
 
   // 7. Timer setup
   const activeLimit = timerOverrideLimit !== null ? timerOverrideLimit : (timerConfig?.[timerMode] || 25 * 60);
@@ -321,7 +346,6 @@ export default function Dashboard() {
       const d = new Date();
       d.setDate(today.getDate() - i);
       const dateStr = d.toLocaleDateString("en-CA");
-
       const focusSecs = fSessions.filter(s => s && s.date === dateStr && s.mode === "focus").reduce((sum, s) => sum + ((s.durationMinutes * 60) || (s.durationSeconds) || 0), 0);
       const distractMins = dists.filter(dist => dist && dist.date === dateStr).reduce((sum, dist) => sum + (dist.durationMinutes || 0), 0);
 
@@ -360,8 +384,59 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* XP Leveling Card */}
+      <div className="glass-card" style={{ display: "flex", flexDirection: "column", gap: "0.75rem", padding: "1rem 1.5rem", borderLeft: "4px solid var(--accent)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div style={{ 
+              background: "rgba(var(--accent-rgb), 0.1)", 
+              color: "var(--accent)", 
+              borderRadius: "50%", 
+              width: "40px", 
+              height: "40px", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center", 
+              fontWeight: 800,
+              fontSize: "1.1rem",
+              border: "1px solid rgba(var(--accent-rgb), 0.2)",
+              flexShrink: 0
+            }}>
+              {currentLevel}
+            </div>
+            <div>
+              <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Current rank</span>
+                <span>{getRank(currentLevel)}</span>
+                {/* <span style={{ fontSize: "0.75rem", padding: "2px 6px", background: "rgba(255,255,255,0.06)", borderRadius: "10px", color: "var(--text-secondary)" }}>
+                  Level {currentLevel}
+                </span> */}
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
+                Accumulated study XP: <strong>{totalXP} XP</strong> &bull; {currentLevel * XP_PER_LEVEL - totalXP} XP to next level
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+            Next Tier: <strong style={{ color: "var(--accent)" }}>{getRank(currentLevel+1)}</strong>
+          </div>
+        </div>
+
+        {/* XP Bar */}
+        <div>
+          <div className="milestone-bar-bg" style={{ height: "6px", borderRadius: "3px" }}>
+            <div className="milestone-bar-fill" style={{ width: `${progressToNextLevel}%`, height: "100%", borderRadius: "3px", background: "linear-gradient(90deg, var(--accent), #a855f7)" }}></div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.65rem", color: "var(--text-muted)", marginTop: "4px" }}>
+            <span>Level {currentLevel} ({currentLevel * XP_PER_LEVEL - XP_PER_LEVEL} XP)</span>
+            <span>{Math.round(progressToNextLevel)}% Progress</span>
+            <span>Level {currentLevel + 1} ({currentLevel * XP_PER_LEVEL} XP)</span>
+          </div>
+        </div>
+      </div>
+
       {/* Stats row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem" }}>
         <div className="glass-card" style={{ textAlign: "center" }}>
           <div style={{ fontSize: "1.8rem", fontWeight: 900, color: getScoreColor(focusScore) }}>
             {focusScore}%
@@ -397,7 +472,138 @@ export default function Dashboard() {
             Deep Work Today
           </div>
         </div>
+
+        <div className="glass-card" style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#ffb900" }}>
+            {peakStudyHours} hrs
+          </div>
+          <div style={{ fontSize: "0.7rem", color: "var(--text-secondary)", textTransform: "uppercase", marginTop: "2px" }}>
+            Peak Study Day
+          </div>
+        </div>
       </div>
+
+      {/* TODAY'S MISSION CARD */}
+      {todaysMission && (
+        <div className="glass-card" style={{ 
+          borderLeft: `4px solid ${
+            todaysMission.confidenceLabel === "🎯 Top Priority" ? "#ff9800" :
+            todaysMission.confidenceLabel === "⭐ Strong Recommendation" ? "#00e676" : "var(--accent)"
+          }`, 
+          padding: "1.5rem", 
+          margin: "1.5rem 0",
+          background: "linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
+          boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.3)",
+          borderRadius: "12px",
+          position: "relative",
+          overflow: "hidden"
+        }}>
+          {/* Subtle background glow */}
+          <div style={{
+            position: "absolute",
+            top: "-20%",
+            right: "-10%",
+            width: "250px",
+            height: "250px",
+            background: `radial-gradient(circle, ${
+              todaysMission.confidenceLabel === "🎯 Top Priority" ? "rgba(255, 152, 0, 0.08)" :
+              todaysMission.confidenceLabel === "⭐ Strong Recommendation" ? "rgba(0, 230, 118, 0.08)" : "rgba(0, 162, 237, 0.08)"
+            } 0%, rgba(0,0,0,0) 70%)`,
+            zIndex: 0,
+            pointerEvents: "none"
+          }} />
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem", position: "relative", zIndex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Sparkles size={18} style={{ 
+                color: todaysMission.confidenceLabel === "🎯 Top Priority" ? "#ff9800" :
+                       todaysMission.confidenceLabel === "⭐ Strong Recommendation" ? "#00e676" : "var(--accent)"
+              }} />
+              <h3 style={{ margin: 0, color: "#fff", fontSize: "1.2rem", fontWeight: 800, letterSpacing: "0.5px" }}>Today's Mission</h3>
+            </div>
+            <span style={{
+              fontSize: "0.75rem",
+              background: todaysMission.confidenceLabel === "🎯 Top Priority" ? "rgba(255, 152, 0, 0.15)" :
+                          todaysMission.confidenceLabel === "⭐ Strong Recommendation" ? "rgba(0, 230, 118, 0.15)" : "rgba(0, 162, 237, 0.15)",
+              color: todaysMission.confidenceLabel === "🎯 Top Priority" ? "#ff9800" :
+                     todaysMission.confidenceLabel === "⭐ Strong Recommendation" ? "#00e676" : "var(--accent)",
+              padding: "4px 10px",
+              borderRadius: "20px",
+              fontWeight: "700",
+              border: `1px solid ${
+                todaysMission.confidenceLabel === "🎯 Top Priority" ? "rgba(255, 152, 0, 0.3)" :
+                todaysMission.confidenceLabel === "⭐ Strong Recommendation" ? "rgba(0, 230, 118, 0.3)" : "rgba(0, 162, 237, 0.3)"
+              }`
+            }}>
+              {todaysMission.confidenceLabel}
+            </span>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "1.5rem", alignItems: "center", position: "relative", zIndex: 1 }}>
+            <div>
+              <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#fff", marginBottom: "8px", lineHeight: 1.3 }}>
+                {todaysMission.lessonTitle} 
+                <div style={{ color: "var(--text-secondary)", fontSize: "0.85rem", fontWeight: 500, marginTop: "4px" }}>
+                  Track: <strong style={{ color: "#fff" }}>{todaysMission.trackTitle}</strong>
+                </div>
+              </div>
+
+              {/* Actionable Coaching details */}
+              <div style={{ 
+                background: "rgba(255, 255, 255, 0.02)", 
+                border: "1px solid rgba(255, 255, 255, 0.05)",
+                borderRadius: "8px",
+                padding: "0.75rem 1rem",
+                margin: "0.75rem 0 1rem 0"
+              }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                    <strong style={{ color: "var(--accent)", display: "block", marginBottom: "2px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Why it was selected:</strong>
+                    {todaysMission.reason}
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.4, borderTop: "1px solid rgba(255, 255, 255, 0.05)", paddingTop: "6px" }}>
+                    <strong style={{ color: "#a855f7", display: "block", marginBottom: "2px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Expected learning impact:</strong>
+                    {todaysMission.expectedImpact}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", fontSize: "0.8rem", color: "#fff" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                  <Clock size={14} style={{ color: "var(--accent)" }} /> 
+                  Est. Completion Time: <strong>{todaysMission.estimatedTimeMins} mins</strong>
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+              <button 
+                onClick={() => handleStartMissionFocus(todaysMission)}
+                className="btn-primary" 
+                style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "0.5rem", 
+                  padding: "0.75rem 1.5rem", 
+                  fontSize: "0.9rem", 
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  borderRadius: "8px",
+                  boxShadow: `0 4px 14px 0 ${
+                    todaysMission.confidenceLabel === "🎯 Top Priority" ? "rgba(255, 152, 0, 0.2)" :
+                    todaysMission.confidenceLabel === "⭐ Strong Recommendation" ? "rgba(0, 230, 118, 0.2)" : "rgba(0, 162, 237, 0.2)"
+                  }`,
+                  border: "none",
+                  transition: "all 0.2s ease-in-out"
+                }}
+              >
+                <Play size={16} fill="currentColor" />
+                <span>Start Focus Session</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Grid columns */}
       <div className="dashboard-grid">

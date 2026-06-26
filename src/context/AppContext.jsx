@@ -1,4 +1,7 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useRef } from "react";
+import { StorageService } from "../services/StorageService.js";
+import { normalizeTrack } from "../services/MigrationService.js";
 
 const AppContext = createContext();
 
@@ -40,14 +43,12 @@ const DEFAULT_PRESETS = {
     longBreak: 30 * 60
   }
 };
-const PRESETS = JSON.parse(localStorage.getItem("timerPresets")) || DEFAULT_PRESETS;
+const PRESETS = StorageService.read("timerPresets", DEFAULT_PRESETS);
 
 const DEFAULT_TRACKS = [];
 const DEFAULT_PLANS = {};
 const DEFAULT_GOALS = [];
-const DEFAULT_ACTIVITIES = [];
 const DEFAULT_DISTRACTIONS = [];
-const DEFAULT_FOCUS_SESSIONS = [];
 
 const DEFAULT_DAILY_REFLECTIONS = [];
 const DEFAULT_DAILY_SCORE_HISTORY = {};
@@ -55,7 +56,7 @@ const DEFAULT_DAILY_SCORE_HISTORY = {};
 export const AppProvider = ({ children }) => {
   // --- Version Check & Automated Migration Clean Reset ---
   const CURRENT_OS_VERSION = "v7";
-  const savedVersion = localStorage.getItem("lp_os_version");
+  const savedVersion = StorageService.read("lp_os_version", null);
   if (savedVersion !== CURRENT_OS_VERSION) {
     const keysToRemove = [
       "lp_learningTracks", "lp_projects", "lp_roadmaps", 
@@ -63,28 +64,18 @@ export const AppProvider = ({ children }) => {
       "lp_focusSessions", "lp_activityLogs", "lp_weeklyReviews", "lp_notifications",
       "lp_todayMission", "lp_currentFocusTask", "lp_dailyScoreHistory", "lp_dailyReflections"
     ];
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-    localStorage.setItem("lp_os_version", CURRENT_OS_VERSION);
+    keysToRemove.forEach(k => StorageService.delete(k));
+    StorageService.write("lp_os_version", CURRENT_OS_VERSION);
   }
 
   // Helper to load localStorage safely
   const loadState = (key, defaultValue) => {
-    try {
-      const saved = localStorage.getItem(key);
-      return saved ? JSON.parse(saved) : defaultValue;
-    } catch (e) {
-      console.error("Error loading localStorage key: " + key, e);
-      return defaultValue;
-    }
+    return StorageService.read(key, defaultValue);
   };
 
   // Helper to save localStorage safely
   const saveState = (key, value) => {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (e) {
-      console.error("Error saving localStorage key: " + key, e);
-    }
+    StorageService.write(key, value);
   };
 
   // --- 2. STATES & AUTOMATIC LOCAL STORAGE DATA MIGRATIONS ---
@@ -108,12 +99,11 @@ export const AppProvider = ({ children }) => {
     };
   });
 
-  const [tracks, setTracks] = useState(() => {
+  const [tracks, setTracksState] = useState(() => {
     try {
-      const savedTracks = localStorage.getItem("lp_tracks");
-      if (savedTracks) {
-        const parsed = JSON.parse(savedTracks);
-        return parsed.map(track => {
+      const parsed = StorageService.read("lp_tracks", null);
+      if (parsed) {
+        const loadedTracks = parsed.map(track => {
           if (!track.tasks) track.tasks = [];
           track.tasks = track.tasks.map(task => {
             // Check if it's already the new format
@@ -135,57 +125,98 @@ export const AppProvider = ({ children }) => {
           });
           return track;
         });
+        return loadedTracks.map(normalizeTrack);
       }
       // Migrate from old schemas
       const migrated = [];
-      const legacyTracks = localStorage.getItem("lp_learningTracks");
+      const legacyTracks = StorageService.read("lp_learningTracks", null);
       if (legacyTracks) {
-        const parsed = JSON.parse(legacyTracks);
-        if (Array.isArray(parsed)) {
-          parsed.forEach(t => {
-            migrated.push({
-              id: t.id || "track-" + Math.random().toString(36).substr(2, 9),
-              title: t.title || "Untitled Track",
-              category: t.category || "course",
-              target: parseInt(t.target, 10) || 50,
-              progress: parseInt(t.progress, 10) || 0,
-              unit: t.category === "book" ? "Pages" : t.category === "playlist" ? "Videos" : "Lessons",
-              priority: t.priority || "medium",
-              deadline: t.deadline || "",
-              status: t.status === "done" ? "completed" : "learning",
-              tasks: t.tasks || []
-            });
+        const parsedLegacy = Array.isArray(legacyTracks) ? legacyTracks : [];
+        parsedLegacy.forEach(t => {
+          migrated.push({
+            id: t.id || "track-" + Math.random().toString(36).substr(2, 9),
+            title: t.title || "Untitled Track",
+            category: t.category || "course",
+            target: parseInt(t.target, 10) || 50,
+            progress: parseInt(t.progress, 10) || 0,
+            unit: t.category === "book" ? "Pages" : t.category === "playlist" ? "Videos" : "Lessons",
+            priority: t.priority || "medium",
+            deadline: t.deadline || "",
+            status: t.status === "done" ? "completed" : "learning",
+            tasks: t.tasks || []
           });
-        }
+        });
       }
-      const legacyProjects = localStorage.getItem("lp_projects");
+      const legacyProjects = StorageService.read("lp_projects", null);
       if (legacyProjects) {
-        const parsed = JSON.parse(legacyProjects);
-        if (Array.isArray(parsed)) {
-          parsed.forEach(p => {
-            const miles = p.milestones || [];
-            migrated.push({
-              id: p.id || "proj-" + Math.random().toString(36).substr(2, 9),
-              title: p.name || "Untitled Project",
-              category: "project",
-              target: 100,
-              progress: p.status === "done" ? 100 : Math.round((miles.filter(m => m.checked).length / (miles.length || 1)) * 100),
-              unit: "Percent",
-              priority: p.priority || "medium",
-              deadline: p.deadline || "",
-              status: p.status === "done" ? "completed" : "learning",
-              tasks: miles.map(m => ({ id: m.id, text: m.text, completed: m.checked })),
-              description: p.desc || ""
-            });
+        const parsedProj = Array.isArray(legacyProjects) ? legacyProjects : [];
+        parsedProj.forEach(p => {
+          const miles = p.milestones || [];
+          migrated.push({
+            id: p.id || "proj-" + Math.random().toString(36).substr(2, 9),
+            title: p.name || "Untitled Project",
+            category: "project",
+            target: 100,
+            progress: p.status === "done" ? 100 : Math.round((miles.filter(m => m.checked).length / (miles.length || 1)) * 100),
+            unit: "Percent",
+            priority: p.priority || "medium",
+            deadline: p.deadline || "",
+            status: p.status === "done" ? "completed" : "learning",
+            tasks: miles.map(m => ({ id: m.id, text: m.text, completed: m.checked })),
+            description: p.desc || ""
           });
-        }
+        });
       }
-      return migrated.length > 0 ? migrated : DEFAULT_TRACKS;
+      const initialTracks = migrated.length > 0 ? migrated : DEFAULT_TRACKS;
+      return initialTracks.map(normalizeTrack);
     } catch (e) {
       console.error("Failed to migrate tracks:", e);
-      return DEFAULT_TRACKS;
+      return DEFAULT_TRACKS.map(normalizeTrack);
     }
   });
+
+  const setTracks = (newTracks) => {
+    setTracksState(prev => {
+      const resolved = typeof newTracks === "function" ? newTracks(prev) : newTracks;
+      return resolved.map(t => {
+        if (!t) return t;
+        const prevTrack = prev.find(p => p && p.id === t.id);
+        let targetTrack = t;
+        
+        if (prevTrack) {
+          if (prevTrack.migrationStatus === "pending") {
+            const cleanPrev = { ...prevTrack, modules: undefined, migrationStatus: undefined, updatedAt: undefined };
+            const cleanNew = { ...t, modules: undefined, migrationStatus: undefined, updatedAt: undefined };
+            const isModified = JSON.stringify(cleanPrev) !== JSON.stringify(cleanNew);
+            
+            if (isModified) {
+              targetTrack = {
+                ...t,
+                migrationStatus: "migrated",
+                updatedAt: new Date().toISOString()
+              };
+            }
+          }
+        } else {
+          // New track added directly
+          targetTrack = {
+            ...t,
+            migrationStatus: "migrated"
+          };
+        }
+        
+        if (targetTrack.tasks && Array.isArray(targetTrack.tasks)) {
+          if (targetTrack.modules && Array.isArray(targetTrack.modules)) {
+            return normalizeTrack(targetTrack);
+          }
+          const rest = { ...targetTrack };
+          delete rest.modules;
+          return normalizeTrack(rest);
+        }
+        return normalizeTrack(targetTrack);
+      });
+    });
+  };
 
   const [dailyPlans, setDailyPlans] = useState(() => {
     const loaded = loadState("lp_dailyPlans", null);
@@ -252,7 +283,7 @@ export const AppProvider = ({ children }) => {
     
     if (toDelete.size > 0) {
       logs = logs.filter(l => !toDelete.has(l.id));
-      localStorage.setItem("lp_activityLogs", JSON.stringify(logs));
+      StorageService.write("lp_activityLogs", logs);
     }
     
     return logs;
@@ -314,10 +345,9 @@ export const AppProvider = ({ children }) => {
     return loaded && PRESETS[loaded] ? loaded : "pomodoro";
   });
   const timerConfig = PRESETS[presetMode] || PRESETS["pomodoro"];
-  // Track today's completed focus seconds
   const [todayFocusSeconds, setTodayFocusSeconds] = useState(() => {
     const todayStr = new Date().toLocaleDateString("en-CA");
-    const saved = localStorage.getItem("lp_today_focus_seconds_" + todayStr);
+    const saved = StorageService.read("lp_today_focus_seconds_" + todayStr, null);
     return saved ? parseInt(saved) : 0;
   });
 
@@ -346,28 +376,91 @@ export const AppProvider = ({ children }) => {
   });
 
   // --- Focus Verification System States ---
-  const [activeFocusSession, setActiveFocusSession] = useState(() => {
-    return loadState("lp_activeFocusSession", null);
-  });
+  const [activeFocusSession, setActiveFocusSession] = useState(null);
+  const [recoverySession, setRecoverySession] = useState(null);
+
+  // Check JIT on mount if there is an active session in local storage
+  useEffect(() => {
+    const saved = localStorage.getItem("lp_activeFocusSession");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed) {
+          parsed.status = "interrupted";
+          setTimeout(() => {
+            setRecoverySession(prev => prev === null ? parsed : prev);
+          }, 0);
+        }
+      } catch (e) {
+        console.error("Failed to parse recovery session", e);
+      }
+    }
+  }, []);
+
+  const resumeFocusSession = () => {
+    if (!recoverySession) return;
+    
+    const restored = { ...recoverySession, status: "running" };
+    setActiveFocusSession(restored);
+    
+    const savedSeconds = loadState("lp_timerSeconds", 0);
+    setTimerSeconds(savedSeconds);
+    
+    setTimerIsRunning(true);
+    setRecoverySession(null);
+  };
+
+  const discardFocusSession = () => {
+    setRecoverySession(null);
+    setActiveFocusSession(null);
+    setTimerSeconds(0);
+    setTimerOverrideLimit(null);
+    setTimerActivePlanId(null);
+    setPendingFocusCheck(null);
+    setShowSummaryModal(false);
+    
+    localStorage.removeItem("lp_activeFocusSession");
+    localStorage.removeItem("lp_timerSeconds");
+    localStorage.removeItem("lp_currentFocusTask");
+  };
   const [pendingFocusCheck, setPendingFocusCheck] = useState(() => {
     return loadState("lp_pendingFocusCheck", null);
   });
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [timerPausedAt, setTimerPausedAt] = useState(() => {
-    const val = localStorage.getItem("lp_timerPausedAt");
+    const val = StorageService.read("lp_timerPausedAt", null);
     return val ? parseInt(val, 10) : null;
   });
 
   // --- 3. SAVE STATES TO LOCALSTORAGE ---
-  useEffect(() => { localStorage.setItem("lp_settings", JSON.stringify(settings)); }, [settings]);
-  useEffect(() => { localStorage.setItem("lp_tracks", JSON.stringify(tracks)); }, [tracks]);
-  useEffect(() => { localStorage.setItem("lp_dailyPlans", JSON.stringify(dailyPlans)); }, [dailyPlans]);
-  useEffect(() => { localStorage.setItem("lp_goals", JSON.stringify(goals)); }, [goals]);
-  useEffect(() => { localStorage.setItem("lp_activityLogs", JSON.stringify(activityLogs)); }, [activityLogs]);
-  useEffect(() => { localStorage.setItem("lp_distractions", JSON.stringify(distractions)); }, [distractions]);
-  useEffect(() => { localStorage.setItem("lp_notifications", JSON.stringify(notifications)); }, [notifications]);
-  useEffect(() => { localStorage.setItem("lp_projects", JSON.stringify(projects)); }, [projects]);
-  useEffect(() => { localStorage.setItem("lp_todayMission", JSON.stringify(todayMission)); }, [todayMission]);
+  useEffect(() => saveState("lp_settings", settings), [settings]);
+  useEffect(() => {
+    const tracksToSave = tracks.map(t => {
+      if (t) {
+        if (t.migrationStatus === "migrated") {
+          // Save hierarchical: strip legacy tasks array
+          const rest = { ...t };
+          delete rest.tasks;
+          return rest;
+        } else {
+          // Save legacy: strip modules and migrationStatus keys to keep storage pure legacy
+          const rest = { ...t };
+          delete rest.modules;
+          delete rest.migrationStatus;
+          return rest;
+        }
+      }
+      return t;
+    });
+    saveState("lp_tracks", tracksToSave);
+  }, [tracks]);
+  useEffect(() => saveState("lp_dailyPlans", dailyPlans), [dailyPlans]);
+  useEffect(() => saveState("lp_goals", goals), [goals]);
+  useEffect(() => saveState("lp_activityLogs", activityLogs), [activityLogs]);
+  useEffect(() => saveState("lp_distractions", distractions), [distractions]);
+  useEffect(() => saveState("lp_notifications", notifications), [notifications]);
+  useEffect(() => saveState("lp_projects", projects), [projects]);
+  useEffect(() => saveState("lp_todayMission", todayMission), [todayMission]);
   useEffect(() => saveState("lp_currentFocusTask", currentFocusTask), [currentFocusTask]);
   useEffect(() => saveState("lp_dailyScoreHistory", dailyScoreHistory), [dailyScoreHistory]);
   useEffect(() => saveState("lp_dailyReflections", dailyReflections), [dailyReflections]);
@@ -382,39 +475,44 @@ export const AppProvider = ({ children }) => {
   useEffect(() => saveState("lp_pendingFocusCheck", pendingFocusCheck), [pendingFocusCheck]);
   useEffect(() => {
     if (timerPausedAt !== null) {
-      localStorage.setItem("lp_timerPausedAt", timerPausedAt.toString());
+      StorageService.write("lp_timerPausedAt", timerPausedAt);
     } else {
-      localStorage.removeItem("lp_timerPausedAt");
+      StorageService.delete("lp_timerPausedAt");
     }
   }, [timerPausedAt]);
 
   useEffect(() => {
     const todayStr = new Date().toLocaleDateString("en-CA");
-    localStorage.setItem("lp_today_focus_seconds_" + todayStr, todayFocusSeconds.toString());
+    StorageService.write("lp_today_focus_seconds_" + todayStr, todayFocusSeconds);
   }, [todayFocusSeconds]);
 
   useEffect(() => {
     const todayStr = new Date().toLocaleDateString("en-CA");
-    localStorage.setItem("lp_today_goals_checked_" + todayStr, JSON.stringify(todayGoalsChecked));
+    StorageService.write("lp_today_goals_checked_" + todayStr, todayGoalsChecked);
   }, [todayGoalsChecked]);
 
   useEffect(() => {
     const todayStr = new Date().toLocaleDateString("en-CA");
-    localStorage.setItem("lp_today_permanent_progress_" + todayStr, JSON.stringify(todayPermanentProgress));
+    StorageService.write("lp_today_permanent_progress_" + todayStr, todayPermanentProgress);
   }, [todayPermanentProgress]);
   useEffect(() => saveState("lp_presetMode", presetMode), [presetMode]);
   // --- 4. TIMER TICK EFFECT (Resilient to background throttling) ---
   const [lastTick, setLastTick] = useState(null);
   const prevTimerSecondsRef = useRef(0);
+  const isSavingFocusSessionRef = useRef(false);
 
   useEffect(() => {
     if (timerIsRunning) {
-      setLastTick(Date.now());
+      setTimeout(() => {
+        setLastTick(prev => prev === null ? Date.now() : prev);
+      }, 0);
       prevTimerSecondsRef.current = timerSeconds;
     } else {
-      setLastTick(null);
+      setTimeout(() => {
+        setLastTick(null);
+      }, 0);
     }
-  }, [timerIsRunning]);
+  }, [timerIsRunning, timerSeconds]);
 
   useEffect(() => {
     let interval = null;
@@ -452,22 +550,34 @@ export const AppProvider = ({ children }) => {
   const getPermanentTarget = (key) => {
     const isOddDay = new Date().getDate() % 2 !== 0;
     switch(key) {
-      case "dsa": 
+      case "dsa": {
         const baseDsa = settings?.permanentGoals?.dsa || 0;
         return settings?.oddEvenMode 
           ? Math.round(baseDsa * (isOddDay ? 1.2 : 0.6) * 60)
           : Math.round(baseDsa * 60);
-      case "development": 
+      }
+      case "development": {
         const baseDev = settings?.permanentGoals?.development || 0;
         return settings?.oddEvenMode 
           ? Math.round(baseDev * (isOddDay ? 0.5 : 1.5) * 60)
           : Math.round(baseDev * 60);
+      }
       case "learning": return Math.round((settings?.permanentGoals?.learning || 0) * 60);
       case "reading": return Math.round((settings?.permanentGoals?.reading || 0) * 2);
       case "exercise": return Math.round((settings?.permanentGoals?.exercise || 0));
       default: return 0;
     }
   };
+
+  const timerSecondsRef = useRef(timerSeconds);
+  useEffect(() => {
+    timerSecondsRef.current = timerSeconds;
+  }, [timerSeconds]);
+
+  const timerPausedAtRef = useRef(timerPausedAt);
+  useEffect(() => {
+    timerPausedAtRef.current = timerPausedAt;
+  }, [timerPausedAt]);
 
   // Monitor timer starting, pausing, and task changes to initialize active session
   useEffect(() => {
@@ -477,40 +587,51 @@ export const AppProvider = ({ children }) => {
         if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
           Notification.requestPermission();
         }
-      } catch (e) {}
+      } catch {
+        // ignore notification block
+      }
 
-      if (!activeFocusSession) {
-        // Start new focus session
-        const newSession = {
-          id: `fs-${Date.now()}`,
-          taskId: currentFocusTask,
-          startTime: Date.now(),
-          lastCheckTime: Date.now(),
-          nextCheckTime: Date.now() + getRandomInterval(),
-          verifiedSeconds: 0,
-          distractedSeconds: 0,
-          breakSeconds: 0,
-          totalElapsedSeconds: 0,
-          mode: "focus"
-        };
-        setActiveFocusSession(newSession);
-        setTimerPausedAt(null);
-      } else if (timerPausedAt) {
-        // Resume session: calculate paused duration and shift check times forward
-        const pauseDuration = Date.now() - timerPausedAt;
-        setActiveFocusSession(prev => {
-          if (!prev) return null;
+      setActiveFocusSession(prev => {
+        if (!prev || prev.taskId !== currentFocusTask) {
+          // Reset timer seconds to 0 if starting/switching to a different task focus session
+          setTimeout(() => {
+            setTimerSeconds(0);
+          }, 0);
+
+          // Start new focus session
+          return {
+            id: `fs-${Date.now()}`,
+            taskId: currentFocusTask,
+            startTime: Date.now(),
+            lastCheckTime: Date.now(),
+            nextCheckTime: Date.now() + getRandomInterval(),
+            verifiedSeconds: 0,
+            distractedSeconds: 0,
+            breakSeconds: 0,
+            totalElapsedSeconds: 0,
+            mode: "focus",
+            status: "running"
+          };
+        } else if (timerPausedAtRef.current) {
+          // Resume session: calculate paused duration and shift check times forward
+          const pauseDuration = Date.now() - timerPausedAtRef.current;
           return {
             ...prev,
             lastCheckTime: prev.lastCheckTime + pauseDuration,
-            nextCheckTime: prev.nextCheckTime + pauseDuration
+            nextCheckTime: prev.nextCheckTime + pauseDuration,
+            status: "running"
           };
-        });
-        setTimerPausedAt(null);
-      }
-    } else if (!timerIsRunning && timerSeconds > 0 && timerMode === "focus") {
+        }
+        return prev;
+      });
+      setTimerPausedAt(null);
+    } else if (!timerIsRunning && timerSecondsRef.current > 0 && timerMode === "focus") {
       // Timer is paused: record pause timestamp
       setTimerPausedAt(Date.now());
+      setActiveFocusSession(prev => {
+        if (!prev) return null;
+        return { ...prev, status: "paused" };
+      });
     }
   }, [timerIsRunning, timerMode, currentFocusTask]);
 
@@ -543,7 +664,9 @@ export const AppProvider = ({ children }) => {
         };
         playTone(now, 587.33, 0.15); // D5
         playTone(now + 0.12, 880, 0.3); // A5
-      } catch (e) {}
+      } catch {
+        // ignore audio chime errors
+      }
 
       // Fire HTML5 System Notification
       try {
@@ -556,7 +679,9 @@ export const AppProvider = ({ children }) => {
             window.focus();
           };
         }
-      } catch (e) {}
+      } catch {
+        // ignore notification errors
+      }
 
       setPendingFocusCheck({
         sessionId: activeFocusSession.id,
@@ -578,9 +703,36 @@ export const AppProvider = ({ children }) => {
     }
 
     if (timerSeconds >= limit) {
-      setTimerIsRunning(false);
-      setTimerSeconds(0);
-      setTimerOverrideLimit(null);
+      setTimeout(() => {
+        setTimerIsRunning(false);
+        setTimerSeconds(0);
+        setTimerOverrideLimit(null);
+        
+        if (timerMode === "focus") {
+          if (activeFocusSession) {
+            const finalElapsed = Math.max(0, Math.floor((Date.now() - activeFocusSession.lastCheckTime) / 1000));
+            
+            setActiveFocusSession(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                verifiedSeconds: (prev.verifiedSeconds || 0) + finalElapsed,
+                verifiedMinutes: Math.floor(((prev.verifiedSeconds || 0) + finalElapsed) / 60),
+                totalElapsedSeconds: (prev.totalElapsedSeconds || 0) + finalElapsed,
+                lastCheckTime: Date.now(),
+                status: "completed"
+              };
+            });
+            
+            setTodayFocusSeconds(s => s + finalElapsed);
+            setPendingFocusCheck(null);
+            setShowSummaryModal(true);
+          }
+        } else {
+          // Just standard finish for breaks
+          setTimerFinishEvent(prev => ({ tick: (prev.tick || 0) + 1, limitSeconds: limit }));
+        }
+      }, 0);
       
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -600,33 +752,11 @@ export const AppProvider = ({ children }) => {
         playBeep(now, 523.25, 0.4);       // C5
         playBeep(now + 0.4, 659.25, 0.4); // E5
         playBeep(now + 0.8, 783.99, 0.8); // G5 (longer)
-      } catch (e) {}
-
-      if (timerMode === "focus") {
-        if (activeFocusSession) {
-          // Calculate the time since lastCheckTime up to when it completed.
-          // Note: if there is already a check pending, we do NOT add any additional time (since it's just been open).
-          setPendingFocusCheck(prev => {
-            if (prev) {
-              return {
-                ...prev,
-                isFinal: true
-              };
-            }
-            const finalElapsed = Math.floor((Date.now() - activeFocusSession.lastCheckTime) / 1000);
-            return {
-              sessionId: activeFocusSession.id,
-              elapsedSeconds: finalElapsed,
-              isFinal: true
-            };
-          });
-        }
-      } else {
-        // Just standard finish for breaks
-        setTimerFinishEvent(prev => ({ tick: (prev.tick || 0) + 1, limitSeconds: limit }));
+      } catch {
+        // ignore audio beep errors
       }
     }
-  }, [timerSeconds, timerIsRunning, timerMode, timerConfig, timerActivePlanId, currentFocusTask, activeFocusSession]);
+  }, [timerSeconds, timerIsRunning, timerMode, timerConfig, timerActivePlanId, currentFocusTask, activeFocusSession, timerOverrideLimit]);
 
   const finishFocusSessionEarly = () => {
     setTimerIsRunning(false);
@@ -781,7 +911,8 @@ export const AppProvider = ({ children }) => {
   };
 
   const saveFocusSession = (reflection, planConfidence, planKeyTakeaway, planNotes) => {
-    if (!activeFocusSession) return;
+    if (!activeFocusSession || isSavingFocusSessionRef.current) return;
+    isSavingFocusSessionRef.current = true;
 
     const verifiedMins = activeFocusSession.verifiedSeconds > 0 
       ? Math.max(1, Math.round(activeFocusSession.verifiedSeconds / 60)) 
@@ -816,6 +947,7 @@ export const AppProvider = ({ children }) => {
           id: `act-${Date.now()}`,
           taskId: taskId,
           date: todayStr,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           durationMinutes: verifiedMins,
           desc: `Logged ${verifiedMins}m on ${key.toUpperCase()} Target`,
           mode: "focus",
@@ -909,6 +1041,7 @@ export const AppProvider = ({ children }) => {
             id: `act-${Date.now()}`,
             taskId: taskId,
             date: todayStr,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             durationMinutes: verifiedMins,
             desc: `Logged ${verifiedMins}m on plan task`,
             mode: "task",
@@ -970,6 +1103,7 @@ export const AppProvider = ({ children }) => {
             id: `act-${Date.now()}`,
             taskId: taskId,
             date: todayStr,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             durationMinutes: verifiedMins,
             desc: `Logged ${verifiedMins}m on daily plan task "${planItem?.label || 'Task'}"`,
             mode: "task",
@@ -1002,6 +1136,7 @@ export const AppProvider = ({ children }) => {
           id: `act-${Date.now()}`,
           taskId: taskId,
           date: todayStr,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           durationMinutes: verifiedMins,
           desc: `Logged ${verifiedMins}m on Goal "${goalItem?.title || 'Goal'}"`,
           mode: "focus",
@@ -1018,6 +1153,7 @@ export const AppProvider = ({ children }) => {
       const act = {
         id: `act-${Date.now()}`,
         date: todayStr,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         durationMinutes: verifiedMins,
         desc: "Completed focus session",
         mode: "focus",
@@ -1038,9 +1174,13 @@ export const AppProvider = ({ children }) => {
     setTimerActivePlanId(null);
     setPendingFocusCheck(null);
     setShowSummaryModal(false);
+    setTimeout(() => {
+      isSavingFocusSessionRef.current = false;
+    }, 500);
   };
 
   const cancelFocusSession = () => {
+    isSavingFocusSessionRef.current = false;
     setCurrentFocusTask(null);
     setActiveFocusSession(null);
     setTimerSeconds(0);
@@ -1054,7 +1194,7 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     const checkMidnight = () => {
       const todayStr = new Date().toLocaleDateString("en-CA");
-      const lastDate = localStorage.getItem("lp_last_opened_date_v4");
+      const lastDate = StorageService.read("lp_last_opened_date_v4", null);
       
       if (lastDate && lastDate !== todayStr) {
         setTodayFocusSeconds(0);
@@ -1075,8 +1215,7 @@ export const AppProvider = ({ children }) => {
         setTodayMission([]);
         setDailyPlans(prev => {
           if (!prev[todayStr]) {
-            const savedTemplate = localStorage.getItem("lp_saved_plans_template");
-            const templatePlans = savedTemplate ? JSON.parse(savedTemplate) : [];
+            const templatePlans = StorageService.read("lp_saved_plans_template", []);
             return {
               ...prev,
               [todayStr]: templatePlans.map(p => ({ ...p, id: "p-" + Date.now() + Math.random().toString().split(".")[1], completed: false }))
@@ -1084,9 +1223,9 @@ export const AppProvider = ({ children }) => {
           }
           return prev;
         });
-        localStorage.setItem("lp_last_opened_date_v4", todayStr);
+        StorageService.write("lp_last_opened_date_v4", todayStr);
       } else if (!lastDate) {
-        localStorage.setItem("lp_last_opened_date_v4", todayStr);
+        StorageService.write("lp_last_opened_date_v4", todayStr);
       }
     };
 
@@ -1198,7 +1337,12 @@ export const AppProvider = ({ children }) => {
       });
     }
 
-    setNotifications(newNotifications);
+    setTimeout(() => {
+      setNotifications(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(newNotifications)) return prev;
+        return newNotifications;
+      });
+    }, 0);
   }, [tracks, activityLogs, goals, dailyPlans]);
 
   const value = {
@@ -1235,6 +1379,8 @@ export const AppProvider = ({ children }) => {
 
     // Focus Verification System
     activeFocusSession, setActiveFocusSession,
+    recoverySession, setRecoverySession,
+    resumeFocusSession, discardFocusSession,
     pendingFocusCheck, setPendingFocusCheck,
     showSummaryModal, setShowSummaryModal,
     getPermanentTarget,

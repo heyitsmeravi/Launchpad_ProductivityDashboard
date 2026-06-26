@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Settings as SettingsIcon, Save, RefreshCw, Trash2, ShieldAlert, Check } from "lucide-react";
+import { Save, Trash2, ShieldAlert, Check } from "lucide-react";
 
 export default function Settings() {
   const { 

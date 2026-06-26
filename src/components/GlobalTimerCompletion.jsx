@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useApp } from "../context/AppContext";
-import { Star, AlertTriangle, ShieldCheck, Zap } from "lucide-react";
+import { Star, ShieldCheck, Zap } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export default function GlobalTimerCompletion() {
   const {
@@ -10,15 +11,11 @@ export default function GlobalTimerCompletion() {
     answerFocusCheck,
     saveFocusSession,
     cancelFocusSession,
-    tracks,
-    timerSeconds,
-    timerIsRunning,
-    setTimerIsRunning,
-    timerMode,
-    timerConfig,
-    timerOverrideLimit,
-    finishFocusSessionEarly
+    tracks
   } = useApp();
+
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [reflectionText, setReflectionText] = useState("");
   const [planConfidence, setPlanConfidence] = useState(0);
@@ -32,23 +29,27 @@ export default function GlobalTimerCompletion() {
   // Reset fields when the summary modal opens
   useEffect(() => {
     if (showSummaryModal) {
-      setReflectionText("");
-      setPlanConfidence(0);
-      setPlanKeyTakeaway("");
+      setTimeout(() => {
+        setReflectionText("");
+        setPlanConfidence(0);
+        setPlanKeyTakeaway("");
+      }, 0);
     }
   }, [showSummaryModal]);
 
   // Reset custom adjustment state when check changes
   useEffect(() => {
     if (pendingFocusCheck) {
-      setIsAdjusting(false);
-      const mins = Math.floor(pendingFocusCheck.elapsedSeconds / 60);
-      setCustomVerifiedMins(mins);
-      setRemainderType("break");
+      setTimeout(() => {
+        setIsAdjusting(false);
+        const mins = Math.floor(pendingFocusCheck.elapsedSeconds / 60);
+        setCustomVerifiedMins(mins);
+        setRemainderType("break");
+      }, 0);
     }
   }, [pendingFocusCheck]);
 
-  const handleSaveAdjustment = () => {
+  const handleSaveAdjustment = useCallback(() => {
     if (!pendingFocusCheck) return;
     const elapsedSecs = pendingFocusCheck.elapsedSeconds;
     const verifiedSecs = Math.min(elapsedSecs, customVerifiedMins * 60);
@@ -61,7 +62,7 @@ export default function GlobalTimerCompletion() {
     });
     
     setIsAdjusting(false);
-  };
+  }, [pendingFocusCheck, customVerifiedMins, remainderType, answerFocusCheck]);
 
   // Keyboard shortcuts when the verification popup is active
   useEffect(() => {
@@ -89,7 +90,7 @@ export default function GlobalTimerCompletion() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [pendingFocusCheck, answerFocusCheck, isAdjusting, customVerifiedMins, remainderType]);
+  }, [pendingFocusCheck, answerFocusCheck, isAdjusting, handleSaveAdjustment]);
 
   const getTaskInfo = (taskId) => {
     if (!taskId) return null;
@@ -132,19 +133,19 @@ export default function GlobalTimerCompletion() {
   const taskInfo = activeFocusSession ? getTaskInfo(activeFocusSession.taskId) : null;
   const taskTitle = taskInfo ? getTaskTitle(taskInfo) : "Generic Focus Session";
 
-  const limit = timerOverrideLimit !== null ? timerOverrideLimit : (timerConfig[timerMode] || 25 * 60);
-  const remainingSeconds = Math.max(0, limit - timerSeconds);
-  const remainingMins = Math.floor(remainingSeconds / 60);
-  const remainingSecs = remainingSeconds % 60;
-  const showFloatingTimer = (activeFocusSession || timerMode === "break") && !pendingFocusCheck && !showSummaryModal;
-
   const handleSaveSession = () => {
     saveFocusSession(reflectionText, planConfidence, planKeyTakeaway, reflectionText);
+    if (location.pathname === "/focus") {
+      navigate("/");
+    }
   };
 
   const handleDiscardSession = () => {
     if (window.confirm("Are you sure you want to discard this session's focus data? All verified time will be cleared from this session.")) {
       cancelFocusSession();
+      if (location.pathname === "/focus") {
+        navigate("/");
+      }
     }
   };
 

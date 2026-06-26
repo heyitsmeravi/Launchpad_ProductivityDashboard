@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Plus, FolderGit2, Trash2, ArrowLeft, ArrowRight, ExternalLink, Edit2, Check, Clock, Calendar, CheckSquare } from "lucide-react";
 
+const generateMilestoneId = () => "m-add-" + Date.now();
+
 export default function Projects() {
   const { projects, setProjects } = useApp();
 
@@ -121,7 +123,7 @@ export default function Projects() {
   const addMilestoneToProject = (projectId) => {
     if (!newMilestoneText.trim()) return;
     const newM = {
-      id: "m-add-" + Date.now(),
+      id: generateMilestoneId(),
       text: newMilestoneText.trim(),
       checked: false
     };

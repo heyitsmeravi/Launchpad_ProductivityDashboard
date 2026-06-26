@@ -1,17 +1,11 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { 
-  Timer, 
   Trash2, 
-  Activity, 
-  Smartphone, 
   Play, 
   Pause, 
   RotateCcw, 
-  ChevronRight, 
-  VolumeX, 
-  Plus,
-  AlertCircle
+  ChevronRight
 } from "lucide-react";
 import { 
   ResponsiveContainer, 
@@ -19,8 +13,7 @@ import {
   Bar, 
   XAxis, 
   YAxis, 
-  Tooltip as ChartTooltip, 
-  Legend 
+  Tooltip as ChartTooltip
 } from "recharts";
 
 export default function Distractions() {
@@ -33,8 +26,6 @@ export default function Distractions() {
     setTimerIsRunning,
     timerMode,
     setTimerMode,
-    todayFocusSeconds,
-    setTodayFocusSeconds,
     timerOverrideLimit,
     setTimerOverrideLimit,
     presetMode,
