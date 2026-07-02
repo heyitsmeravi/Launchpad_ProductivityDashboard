@@ -538,7 +538,9 @@ export const AppProvider = ({ children }) => {
   }, [timerIsRunning, lastTick, timerMode, timerConfig, timerOverrideLimit]);
 
   // Helper to get random interval for verification check (7 to 15 minutes)
+  // const checkDelay = true;
   const getRandomInterval = () => {
+    // if (checkDelay) return 5000;
     const minMins = 7;
     const maxMins = 15;
     const randomMins = minMins + Math.random() * (maxMins - minMins);
@@ -604,7 +606,7 @@ export const AppProvider = ({ children }) => {
             taskId: currentFocusTask,
             startTime: Date.now(),
             lastCheckTime: Date.now(),
-            nextCheckTime: Date.now() + getRandomInterval(),
+            nextCheckTime: Date.now() + getRandomInterval(), 
             verifiedSeconds: 0,
             distractedSeconds: 0,
             breakSeconds: 0,
@@ -637,7 +639,14 @@ export const AppProvider = ({ children }) => {
 
   // Periodically check if a focus verification is due
   useEffect(() => {
-    if (!timerIsRunning || timerMode !== "focus" || !activeFocusSession || pendingFocusCheck) return;
+    if (
+      !timerIsRunning ||
+      timerMode !== "focus" ||
+      !activeFocusSession ||
+      activeFocusSession.status !== "running" ||
+      timerPausedAt !== null ||
+      pendingFocusCheck
+    ) return;
 
     const limit = timerOverrideLimit !== null ? timerOverrideLimit : timerConfig[timerMode];
     if (limit < 10 * 60) return; // Disable focus checks for short timers (< 10 minutes)
@@ -689,7 +698,7 @@ export const AppProvider = ({ children }) => {
         isFinal: false
       });
     }
-  }, [timerSeconds, timerIsRunning, timerMode, activeFocusSession, pendingFocusCheck, timerOverrideLimit, timerConfig]);
+  }, [timerSeconds, timerIsRunning, timerMode, activeFocusSession, pendingFocusCheck, timerOverrideLimit, timerConfig, timerPausedAt]);
 
   // Handle ticking limits and final check triggering
   useEffect(() => {
